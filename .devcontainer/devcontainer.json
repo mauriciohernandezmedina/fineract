@@ -29,13 +29,13 @@
   "containerEnv": {
     "GRADLE_OPTS": "-Xmx4g -XX:MaxMetaspaceSize=1g -Dorg.gradle.daemon=true",
     "FINERACT_HIKARI_DRIVER_SOURCE_CLASS_NAME": "org.postgresql.Driver",
-    "FINERACT_HIKARI_JDBC_URL": "jdbc:postgresql://postgres:5432/fineract_tenants",
+    "FINERACT_HIKARI_JDBC_URL": "jdbc:postgresql://localhost:5432/fineract_tenants",
     "FINERACT_HIKARI_USERNAME": "postgres",
     "FINERACT_HIKARI_PASSWORD": "postgres",
     "FINERACT_DEFAULT_TENANTDB_PORT": "5432",
     "FINERACT_DEFAULT_TENANTDB_UID": "postgres",
     "FINERACT_DEFAULT_TENANTDB_PWD": "postgres",
-    "FINERACT_DEFAULT_TENANTDB_HOSTNAME": "postgres"
+    "FINERACT_DEFAULT_TENANTDB_HOSTNAME": "localhost"
   },
   "customizations": {
     "vscode": {
