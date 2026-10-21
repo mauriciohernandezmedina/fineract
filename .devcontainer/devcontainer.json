@@ -1,5 +1,5 @@
 {
-  "name": "Fineract 1.15 Clean",
+  "name": "Fineract 1.15 Native (PostgreSQL)",
   "image": "mcr.microsoft.com/devcontainers/java:1-21-bullseye",
   "hostRequirements": {
     "cpus": 4,
@@ -13,11 +13,13 @@
       "onAutoForward": "notify"
     },
     "5432": {
-      "label": "PostgreSQL",
+      "label": "PostgreSQL Local",
       "onAutoForward": "silent"
     }
   },
   "containerEnv": {
+    "JAVA_HOME": "/usr/lib/jvm/msopenjdk-current",
+    "GRADLE_OPTS": "-Xmx1024m -XX:MaxMetaspaceSize=512m -Dorg.gradle.daemon=true",
     "FINERACT_HIKARI_DRIVER_SOURCE_CLASS_NAME": "org.postgresql.Driver",
     "FINERACT_HIKARI_JDBC_URL": "jdbc:postgresql://localhost:5432/fineract_tenants",
     "FINERACT_HIKARI_USERNAME": "postgres",
@@ -37,9 +39,18 @@
         "humao.rest-client"
       ],
       "settings": {
+        "java.jdt.ls.java.home": "/usr/lib/jvm/msopenjdk-current",
+        "java.import.gradle.java.home": "/usr/lib/jvm/msopenjdk-current",
         "java.autobuild.enabled": false,
         "java.import.gradle.enabled": false,
-        "gradle.autoDetect": "off"
+        "java.gradle.buildServer.enabled": "off",
+        "gradle.autoDetect": "off",
+        "files.watcherExclude": {
+          "**/.git/objects/**": true,
+          "**/.git/subtree-cache/**": true,
+          "**/build/**": true,
+          "**/.gradle/**": true
+        }
       }
     }
   }
