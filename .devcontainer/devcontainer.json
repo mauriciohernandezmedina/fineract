@@ -1,24 +1,23 @@
 {
-  "name": "Fineract 1.15 Native",
+  "name": "Fineract 1.15 Clean",
   "image": "mcr.microsoft.com/devcontainers/java:1-21-bullseye",
   "hostRequirements": {
     "cpus": 4,
     "memory": "16gb",
     "storage": "32gb"
   },
-  "forwardPorts": [8080, 8443, 5432],
+  "forwardPorts": [8080, 5432],
   "portsAttributes": {
     "8080": {
       "label": "Fineract HTTP API",
       "onAutoForward": "notify"
     },
     "5432": {
-      "label": "PostgreSQL Local",
+      "label": "PostgreSQL",
       "onAutoForward": "silent"
     }
   },
   "containerEnv": {
-    "GRADLE_OPTS": "-Xmx1024m -XX:MaxMetaspaceSize=512m",
     "FINERACT_HIKARI_DRIVER_SOURCE_CLASS_NAME": "org.postgresql.Driver",
     "FINERACT_HIKARI_JDBC_URL": "jdbc:postgresql://localhost:5432/fineract_tenants",
     "FINERACT_HIKARI_USERNAME": "postgres",
@@ -30,18 +29,17 @@
     "FINERACT_SERVER_SSL_ENABLED": "false",
     "FINERACT_SERVER_PORT": "8080"
   },
-  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "onCreateCommand": "bash .devcontainer/setup.sh",
   "postStartCommand": "sudo service postgresql start",
   "customizations": {
     "vscode": {
       "extensions": [
-        "vscjava.vscode-java-pack",
         "humao.rest-client"
       ],
       "settings": {
-        "java.import.gradle.wrapper.enabled": true,
-        "java.jdt.ls.vmargs": "-XX:+UseG1GC -Dsun.zip.disableMemoryMapping=true -Xmx2G -Xms512m",
-        "gradle.nestedProjects": false
+        "java.autobuild.enabled": false,
+        "java.import.gradle.enabled": false,
+        "gradle.autoDetect": "off"
       }
     }
   }
