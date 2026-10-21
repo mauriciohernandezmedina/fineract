@@ -2,6 +2,7 @@
 set -e
 
 echo "=== 1. Instalando y configurando PostgreSQL nativo ==="
+sudo rm -f /etc/apt/sources.list.d/yarn.list
 sudo apt-get update
 sudo apt-get install -y postgresql postgresql-contrib
 sudo service postgresql start

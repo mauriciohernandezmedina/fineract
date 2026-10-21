@@ -1,6 +1,6 @@
 {
   "name": "Fineract 1.15 Native (PostgreSQL)",
-  "image": "mcr.microsoft.com/devcontainers/java:1-21-bullseye",
+  "image": "mcr.microsoft.com/devcontainers/java:1-21-bookworm",
   "hostRequirements": {
     "cpus": 4,
     "memory": "16gb",
