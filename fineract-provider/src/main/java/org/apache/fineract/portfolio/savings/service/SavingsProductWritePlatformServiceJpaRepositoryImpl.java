@@ -47,6 +47,7 @@ import org.apache.fineract.portfolio.savings.DepositAccountType;
 import org.apache.fineract.portfolio.savings.SavingsApiConstants;
 import org.apache.fineract.portfolio.savings.data.SavingsProductDataValidator;
 import org.apache.fineract.portfolio.savings.domain.SavingsProduct;
+import org.apache.fineract.portfolio.interestratechart.service.InterestRateChartAssembler;
 import org.apache.fineract.portfolio.savings.domain.SavingsProductAssembler;
 import org.apache.fineract.portfolio.savings.domain.SavingsProductRepository;
 import org.apache.fineract.portfolio.savings.exception.SavingsProductNotFoundException;
@@ -64,6 +65,7 @@ public class SavingsProductWritePlatformServiceJpaRepositoryImpl implements Savi
     private final SavingsProductAssembler savingsProductAssembler;
     private final ProductToGLAccountMappingWritePlatformService accountMappingWritePlatformService;
     private final FineractEntityAccessUtil fineractEntityAccessUtil;
+    private final InterestRateChartAssembler chartAssembler;
 
     /*
      * Guaranteed to throw an exception no matter what the data integrity issue is.
@@ -135,6 +137,8 @@ public class SavingsProductWritePlatformServiceJpaRepositoryImpl implements Savi
             this.context.authenticatedUser();
             final SavingsProduct product = this.savingProductRepository.findById(productId)
                     .orElseThrow(() -> new SavingsProductNotFoundException(productId));
+
+            product.setHelpers(this.chartAssembler);
 
             this.fromApiJsonDataValidator.validateForUpdate(command.json(), product);
 

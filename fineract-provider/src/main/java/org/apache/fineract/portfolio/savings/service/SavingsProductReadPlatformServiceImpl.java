@@ -30,6 +30,8 @@ import org.apache.fineract.infrastructure.entityaccess.domain.FineractEntityType
 import org.apache.fineract.infrastructure.entityaccess.service.FineractEntityAccessUtil;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.organisation.monetary.data.CurrencyData;
+import org.apache.fineract.portfolio.interestratechart.data.InterestRateChartData;
+import org.apache.fineract.portfolio.interestratechart.service.InterestRateChartReadService;
 import org.apache.fineract.portfolio.savings.DepositAccountType;
 import org.apache.fineract.portfolio.savings.data.SavingsProductData;
 import org.apache.fineract.portfolio.savings.exception.SavingsProductNotFoundException;
@@ -46,6 +48,7 @@ public class SavingsProductReadPlatformServiceImpl implements SavingsProductRead
     private final SavingProductMapper savingsProductRowMapper = new SavingProductMapper();
     private final SavingProductLookupMapper savingsProductLookupsRowMapper = new SavingProductLookupMapper();
     private final FineractEntityAccessUtil fineractEntityAccessUtil;
+    private final InterestRateChartReadService chartReadPlatformService;
 
     @Override
     public Collection<SavingsProductData> retrieveAll() {
@@ -87,8 +90,15 @@ public class SavingsProductReadPlatformServiceImpl implements SavingsProductRead
         try {
             this.context.authenticatedUser();
             final String sql = "select " + this.savingsProductRowMapper.schema() + " where sp.id = ? and sp.deposit_type_enum = ?";
-            return this.jdbcTemplate.queryForObject(sql, this.savingsProductRowMapper, // NOSONAR
+            SavingsProductData savingsProductData = this.jdbcTemplate.queryForObject(sql, this.savingsProductRowMapper, // NOSONAR
                     new Object[] { savingProductId, DepositAccountType.SAVINGS_DEPOSIT.getValue() });
+
+            if (this.chartReadPlatformService != null) {
+                final Collection<InterestRateChartData> charts = this.chartReadPlatformService.retrieveAllWithSlabs(savingProductId);
+                savingsProductData = SavingsProductData.withCharts(savingsProductData, charts);
+            }
+
+            return savingsProductData;
         } catch (final EmptyResultDataAccessException e) {
             throw new SavingsProductNotFoundException(savingProductId, e);
         }

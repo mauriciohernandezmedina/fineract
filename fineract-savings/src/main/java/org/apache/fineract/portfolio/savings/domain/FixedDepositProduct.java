@@ -69,13 +69,6 @@ public class FixedDepositProduct extends SavingsProduct {
     @OneToOne(mappedBy = "product", cascade = CascadeType.ALL)
     private DepositProductTermAndPreClosure productTermAndPreClosure;
 
-    @OneToMany(fetch = FetchType.LAZY, cascade = CascadeType.ALL)
-    @JoinTable(name = "m_deposit_product_interest_rate_chart", joinColumns = @JoinColumn(name = "deposit_product_id"), inverseJoinColumns = @JoinColumn(name = "interest_rate_chart_id", unique = true))
-    protected Set<InterestRateChart> charts;
-
-    @Transient
-    protected InterestRateChartAssembler chartAssembler;
-
     protected FixedDepositProduct() {
 
     }
@@ -120,23 +113,6 @@ public class FixedDepositProduct extends SavingsProduct {
         }
 
         this.productTermAndPreClosure = productTermAndPreClosure;
-    }
-
-    public void addCharts(final Set<InterestRateChart> newCharts) {
-        final Set<InterestRateChart> existingCharts = setOfCharts();
-        existingCharts.addAll(newCharts);
-    }
-
-    public void addChart(final InterestRateChart newChart) {
-        final Set<InterestRateChart> existingCharts = setOfCharts();
-        existingCharts.add(newChart);
-    }
-
-    public Set<InterestRateChart> setOfCharts() {
-        if (this.charts == null) {
-            this.charts = new HashSet<>();
-        }
-        return this.charts;
     }
 
     @Override
@@ -224,27 +200,6 @@ public class FixedDepositProduct extends SavingsProduct {
         }
     }
 
-    @Override
-    public InterestRateChart findChart(Long chartId) {
-        final Set<InterestRateChart> charts = setOfCharts();
-
-        for (InterestRateChart chart : charts) {
-            if (chart.getId().equals(chartId)) {
-                return chart;
-            }
-        }
-        return null;
-    }
-
-    private boolean removeChart(InterestRateChart chart) {
-        Set<InterestRateChart> charts = setOfCharts();
-        return charts.remove(chart);
-    }
-
-    public void setHelpers(final InterestRateChartAssembler chartAssembler) {
-        this.chartAssembler = chartAssembler;
-    }
-
     public void validateCharts(final DataValidatorBuilder baseDataValidator) {
         final Set<InterestRateChart> charts = this.setOfCharts();
         for (InterestRateChart existingChart : charts) {
@@ -263,20 +218,6 @@ public class FixedDepositProduct extends SavingsProduct {
                 }
             }
         }
-    }
-
-    @Override
-    public InterestRateChart applicableChart(final LocalDate target) {
-        InterestRateChart applicableChart = null;
-        if (this.charts != null) {
-            for (InterestRateChart chart : this.charts) {
-                if (chart.isApplicableChartFor(target)) {
-                    applicableChart = chart;
-                    break;
-                }
-            }
-        }
-        return applicableChart;
     }
 
     public DepositProductTermAndPreClosure depositProductTermAndPreClosure() {

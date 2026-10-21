@@ -439,8 +439,8 @@ public class SavingsConfiguration {
     @Bean
     @ConditionalOnMissingBean(SavingsProductReadPlatformService.class)
     public SavingsProductReadPlatformService savingsProductReadPlatformService(PlatformSecurityContext context, JdbcTemplate jdbcTemplate,
-            FineractEntityAccessUtil fineractEntityAccessUtil) {
-        return new SavingsProductReadPlatformServiceImpl(context, jdbcTemplate, fineractEntityAccessUtil);
+            FineractEntityAccessUtil fineractEntityAccessUtil, InterestRateChartReadService chartReadPlatformService) {
+        return new SavingsProductReadPlatformServiceImpl(context, jdbcTemplate, fineractEntityAccessUtil, chartReadPlatformService);
     }
 
     @Bean
@@ -449,9 +449,10 @@ public class SavingsConfiguration {
             SavingsProductRepository savingProductRepository, SavingsProductDataValidator fromApiJsonDataValidator,
             SavingsProductAssembler savingsProductAssembler,
             ProductToGLAccountMappingWritePlatformService accountMappingWritePlatformService,
-            FineractEntityAccessUtil fineractEntityAccessUtil) {
+            FineractEntityAccessUtil fineractEntityAccessUtil,
+            InterestRateChartAssembler chartAssembler) {
         return new SavingsProductWritePlatformServiceJpaRepositoryImpl(context, savingProductRepository, fromApiJsonDataValidator,
-                savingsProductAssembler, accountMappingWritePlatformService, fineractEntityAccessUtil);
+                savingsProductAssembler, accountMappingWritePlatformService, fineractEntityAccessUtil, chartAssembler);
     }
 
     @Bean

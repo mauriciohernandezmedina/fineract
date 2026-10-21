@@ -32,6 +32,7 @@ import org.apache.fineract.accounting.producttoaccountmapping.data.PaymentTypeTo
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 import org.apache.fineract.organisation.monetary.data.CurrencyData;
 import org.apache.fineract.portfolio.charge.data.ChargeData;
+import org.apache.fineract.portfolio.interestratechart.data.InterestRateChartData;
 import org.apache.fineract.portfolio.paymenttype.data.PaymentTypeData;
 import org.apache.fineract.portfolio.tax.data.TaxGroupData;
 
@@ -96,6 +97,10 @@ public final class SavingsProductData implements Serializable {
     // charges
     private final Collection<ChargeData> charges;
 
+    // interest rate charts
+    @Getter
+    private final Collection<InterestRateChartData> charts;
+
     // template
     private final Collection<CurrencyData> currencyOptions;
     private final Collection<EnumOptionData> interestCompoundingPeriodTypeOptions;
@@ -157,6 +162,7 @@ public final class SavingsProductData implements Serializable {
         final Long daysToInactive = null;
         final Long daysToDormancy = null;
         final Long daysToEscheat = null;
+        final Collection<InterestRateChartData> charts = null;
 
         return new SavingsProductData(id, name, shortName, description, currency, nominalAnnualInterestRate, interestCompoundingPeriodType,
                 interestPostingPeriodType, interestCalculationType, interestCalculationDaysInYearType, minRequiredOpeningBalance,
@@ -167,7 +173,7 @@ public final class SavingsProductData implements Serializable {
                 penaltyOptions, feeToIncomeAccountMappings, penaltyToIncomeAccountMappings, allowOverdraft, overdraftLimit,
                 minRequiredBalance, enforceMinRequiredBalance, maxAllowedLienLimit, lienAllowed, minBalanceForInterestCalculation,
                 nominalAnnualInterestRateOverdraft, minOverdraftForInterestCalculation, withHoldTax, taxGroup, taxGroupOptions,
-                isDormancyTrackingActive, daysToInactive, daysToDormancy, daysToEscheat, accountMappingForPayment);
+                isDormancyTrackingActive, daysToInactive, daysToDormancy, daysToEscheat, accountMappingForPayment, charts);
     }
 
     public static SavingsProductData withCharges(final SavingsProductData product, final Collection<ChargeData> charges) {
@@ -185,7 +191,25 @@ public final class SavingsProductData implements Serializable {
                 product.minBalanceForInterestCalculation, product.nominalAnnualInterestRateOverdraft,
                 product.minOverdraftForInterestCalculation, product.withHoldTax, product.taxGroup, product.taxGroupOptions,
                 product.isDormancyTrackingActive, product.daysToInactive, product.daysToDormancy, product.daysToEscheat,
-                product.accountMappingForPayment);
+                product.accountMappingForPayment, product.charts);
+    }
+
+    public static SavingsProductData withCharts(final SavingsProductData product, final Collection<InterestRateChartData> charts) {
+        return new SavingsProductData(product.id, product.name, product.shortName, product.description, product.currency,
+                product.nominalAnnualInterestRate, product.interestCompoundingPeriodType, product.interestPostingPeriodType,
+                product.interestCalculationType, product.interestCalculationDaysInYearType, product.minRequiredOpeningBalance,
+                product.lockinPeriodFrequency, product.lockinPeriodFrequencyType, product.withdrawalFeeForTransfers, product.accountingRule,
+                product.accountingMappings, product.paymentChannelToFundSourceMappings, product.currencyOptions,
+                product.interestCompoundingPeriodTypeOptions, product.interestPostingPeriodTypeOptions,
+                product.interestCalculationTypeOptions, product.interestCalculationDaysInYearTypeOptions,
+                product.lockinPeriodFrequencyTypeOptions, product.withdrawalFeeTypeOptions, product.paymentTypeOptions,
+                product.accountingRuleOptions, product.accountingMappingOptions, product.charges, product.chargeOptions, product.penaltyOptions,
+                product.feeToIncomeAccountMappings, product.penaltyToIncomeAccountMappings, product.allowOverdraft, product.overdraftLimit,
+                product.minRequiredBalance, product.enforceMinRequiredBalance, product.maxAllowedLienLimit, product.lienAllowed,
+                product.minBalanceForInterestCalculation, product.nominalAnnualInterestRateOverdraft,
+                product.minOverdraftForInterestCalculation, product.withHoldTax, product.taxGroup, product.taxGroupOptions,
+                product.isDormancyTrackingActive, product.daysToInactive, product.daysToDormancy, product.daysToEscheat,
+                product.accountMappingForPayment, charts);
     }
 
     /**
@@ -216,7 +240,8 @@ public final class SavingsProductData implements Serializable {
                 existingProduct.maxAllowedLienLimit, existingProduct.lienAllowed, existingProduct.minBalanceForInterestCalculation,
                 existingProduct.nominalAnnualInterestRateOverdraft, existingProduct.minOverdraftForInterestCalculation,
                 existingProduct.withHoldTax, existingProduct.taxGroup, taxGroupOptions, existingProduct.isDormancyTrackingActive,
-                existingProduct.daysToInactive, existingProduct.daysToDormancy, existingProduct.daysToEscheat, accountMappingForPayment);
+                existingProduct.daysToInactive, existingProduct.daysToDormancy, existingProduct.daysToEscheat, accountMappingForPayment,
+                existingProduct.charts);
     }
 
     public static SavingsProductData withAccountingDetails(final SavingsProductData existingProduct,
@@ -252,7 +277,7 @@ public final class SavingsProductData implements Serializable {
                 existingProduct.nominalAnnualInterestRateOverdraft, existingProduct.minOverdraftForInterestCalculation,
                 existingProduct.withHoldTax, existingProduct.taxGroup, existingProduct.taxGroupOptions,
                 existingProduct.isDormancyTrackingActive, existingProduct.daysToInactive, existingProduct.daysToDormancy,
-                existingProduct.daysToEscheat, existingProduct.accountMappingForPayment);
+                existingProduct.daysToEscheat, existingProduct.accountMappingForPayment, existingProduct.charts);
     }
 
     public static SavingsProductData instance(final Long id, final String name, final String shortName, final String description,
@@ -287,6 +312,7 @@ public final class SavingsProductData implements Serializable {
         final Collection<ChargeToGLAccountMapper> penaltyToIncomeAccountMappings = null;
         final Collection<TaxGroupData> taxGroupOptions = null;
         final String accountMappingForPayment = null;
+        final Collection<InterestRateChartData> charts = null;
 
         return new SavingsProductData(id, name, shortName, description, currency, nominalAnnualInterestRate, interestCompoundingPeriodType,
                 interestPostingPeriodType, interestCalculationType, interestCalculationDaysInYearType, minRequiredOpeningBalance,
@@ -297,7 +323,7 @@ public final class SavingsProductData implements Serializable {
                 penaltyOptions, feeToIncomeAccountMappings, penaltyToIncomeAccountMappings, allowOverdraft, overdraftLimit,
                 minRequiredBalance, enforceMinRequiredBalance, maxAllowedLienLimit, lienAllowed, minBalanceForInterestCalculation,
                 nominalAnnualInterestRateOverdraft, minOverdraftForInterestCalculation, withHoldTax, taxGroup, taxGroupOptions,
-                isDormancyTrackingActive, daysToInactive, daysToDormancy, daysToEscheat, accountMappingForPayment);
+                isDormancyTrackingActive, daysToInactive, daysToDormancy, daysToEscheat, accountMappingForPayment, charts);
     }
 
     public static SavingsProductData lookup(final Long id, final String name) {
@@ -350,6 +376,7 @@ public final class SavingsProductData implements Serializable {
         final Long daysToDormancy = null;
         final Long daysToEscheat = null;
         final String accountMappingForPayment = null;
+        final Collection<InterestRateChartData> charts = null;
 
         return new SavingsProductData(id, name, shortName, description, currency, nominalAnnualInterestRate, interestCompoundingPeriodType,
                 interestPostingPeriodType, interestCalculationType, interestCalculationDaysInYearType, minRequiredOpeningBalance,
@@ -360,7 +387,7 @@ public final class SavingsProductData implements Serializable {
                 penaltyOptions, feeToIncomeAccountMappings, penaltyToIncomeAccountMappings, allowOverdraft, overdraftLimit,
                 minRequiredBalance, enforceMinRequiredBalance, maxAllowedLienLimit, lienAllowed, minBalanceForInterestCalculation,
                 nominalAnnualInterestRateOverdraft, minOverdraftForInterestCalculation, withHoldTax, taxGroup, taxGroupOptions,
-                isDormancyTrackingActive, daysToInactive, daysToDormancy, daysToEscheat, accountMappingForPayment);
+                isDormancyTrackingActive, daysToInactive, daysToDormancy, daysToEscheat, accountMappingForPayment, charts);
     }
 
     public static SavingsProductData createForInterestPosting(final Long id, final EnumOptionData accountingRule) {
@@ -424,6 +451,7 @@ public final class SavingsProductData implements Serializable {
         this.daysToDormancy = null;
         this.daysToEscheat = null;
         this.accountMappingForPayment = null;
+        this.charts = null;
     }
 
     private SavingsProductData(final Long id, final String name, final String shortName, final String description,
@@ -448,7 +476,7 @@ public final class SavingsProductData implements Serializable {
             final BigDecimal nominalAnnualInterestRateOverdraft, final BigDecimal minOverdraftForInterestCalculation,
             final boolean withHoldTax, final TaxGroupData taxGroup, final Collection<TaxGroupData> taxGroupOptions,
             final Boolean isDormancyTrackingActive, final Long daysToInactive, final Long daysToDormancy, final Long daysToEscheat,
-            final String accountMappingForPayment) {
+            final String accountMappingForPayment, final Collection<InterestRateChartData> charts) {
         this.id = id;
         this.name = name;
         this.shortName = shortName;
@@ -508,6 +536,7 @@ public final class SavingsProductData implements Serializable {
         this.daysToDormancy = daysToDormancy;
         this.daysToEscheat = daysToEscheat;
         this.accountMappingForPayment = accountMappingForPayment;
+        this.charts = charts;
     }
 
     public boolean hasAccountingEnabled() {

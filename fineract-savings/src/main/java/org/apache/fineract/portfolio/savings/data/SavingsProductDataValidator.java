@@ -77,16 +77,30 @@ import org.apache.fineract.portfolio.savings.SavingsApiConstants;
 import org.apache.fineract.portfolio.savings.SavingsCompoundingInterestPeriodType;
 import org.apache.fineract.portfolio.savings.SavingsInterestCalculationDaysInYearType;
 import org.apache.fineract.portfolio.savings.SavingsInterestCalculationType;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import org.apache.fineract.portfolio.interestratechart.data.InterestRateChartDataValidator;
 import org.apache.fineract.portfolio.savings.SavingsPostingInterestPeriodType;
 import org.apache.fineract.portfolio.savings.domain.SavingsProduct;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Component
-@RequiredArgsConstructor
 public class SavingsProductDataValidator {
 
     private final FromJsonHelper fromApiJsonHelper;
     private final SavingsProductAccountingDataValidator savingsProductAccountingDataValidator;
+    private final InterestRateChartDataValidator chartDataValidator;
+
+    @Autowired
+    public SavingsProductDataValidator(final FromJsonHelper fromApiJsonHelper,
+            final SavingsProductAccountingDataValidator savingsProductAccountingDataValidator,
+            final InterestRateChartDataValidator chartDataValidator) {
+        this.fromApiJsonHelper = fromApiJsonHelper;
+        this.savingsProductAccountingDataValidator = savingsProductAccountingDataValidator;
+        this.chartDataValidator = chartDataValidator;
+    }
+
     private static final Set<String> SAVINGS_PRODUCT_REQUEST_DATA_PARAMETERS = new HashSet<>(Arrays.asList(
             SavingsApiConstants.localeParamName, SavingsApiConstants.monthDayFormatParamName, nameParamName, shortNameParamName,
             descriptionParamName, currencyCodeParamName, digitsAfterDecimalParamName, inMultiplesOfParamName,
@@ -94,7 +108,7 @@ public class SavingsProductDataValidator {
             interestCalculationTypeParamName, interestCalculationDaysInYearTypeParamName, minRequiredOpeningBalanceParamName,
             lockinPeriodFrequencyParamName, lockinPeriodFrequencyTypeParamName, SavingsApiConstants.withdrawalFeeAmountParamName,
             SavingsApiConstants.withdrawalFeeTypeParamName, withdrawalFeeForTransfersParamName, feeAmountParamName, feeOnMonthDayParamName,
-            SavingsApiConstants.accountingRuleParamName, SavingsApiConstants.chargesParamName,
+            SavingsApiConstants.accountingRuleParamName, SavingsApiConstants.chargesParamName, SavingsApiConstants.chartsParamName,
             SavingProductAccountingParams.INCOME_FROM_FEES.getValue(), SavingProductAccountingParams.INCOME_FROM_PENALTIES.getValue(),
             SavingProductAccountingParams.INTEREST_ON_SAVINGS.getValue(), SavingProductAccountingParams.PENALTIES_RECEIVABLE.getValue(),
             SavingProductAccountingParams.PAYMENT_CHANNEL_FUND_SOURCE_MAPPING.getValue(),
@@ -273,6 +287,7 @@ public class SavingsProductDataValidator {
         }
         validateTaxWithHoldingParams(baseDataValidator, element, true);
         validateLienParams(baseDataValidator, element);
+        validateChartsData(element, baseDataValidator);
         throwExceptionIfValidationWarningsExist(dataValidationErrors);
     }
 
@@ -442,7 +457,29 @@ public class SavingsProductDataValidator {
 
         validateTaxWithHoldingParams(baseDataValidator, element, false);
         validateLienParams(baseDataValidator, element);
+        validateChartsData(element, baseDataValidator);
         throwExceptionIfValidationWarningsExist(dataValidationErrors);
+    }
+
+    private void validateChartsData(final JsonElement element, final DataValidatorBuilder baseDataValidator) {
+        if (element.isJsonObject() && this.fromApiJsonHelper.parameterExists(SavingsApiConstants.chartsParamName, element)) {
+            final JsonArray array = this.fromApiJsonHelper.extractJsonArrayNamed(SavingsApiConstants.chartsParamName, element);
+            baseDataValidator.reset().parameter(SavingsApiConstants.chartsParamName).value(array).notNull().jsonArrayNotEmpty();
+
+            if (array == null) {
+                return;
+            }
+
+            for (int i = 0; i < array.size(); i++) {
+                final JsonObject interestRateChartElement = array.get(i).getAsJsonObject();
+                final String json = this.fromApiJsonHelper.toJson(interestRateChartElement);
+                if (!this.fromApiJsonHelper.parameterExists(SavingsApiConstants.idParamName, interestRateChartElement)) {
+                    this.chartDataValidator.validateForCreate(json, baseDataValidator);
+                } else {
+                    this.chartDataValidator.validateForUpdate(json, baseDataValidator);
+                }
+            }
+        }
     }
 
     private void throwExceptionIfValidationWarningsExist(final List<ApiParameterError> dataValidationErrors) {
