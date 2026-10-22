@@ -122,4 +122,89 @@ if [ -d "buildSrc" ]; then
 fi
 git update-index --assume-unchanged gradle.properties build.gradle || true
 
+echo "=== 5. Configurando entorno SSH persistente y comandos globales (build-fineract / run-fineract) ==="
+sudo tee /etc/profile.d/fineract-env.sh > /dev/null << 'EOF'
+export JAVA_HOME="/usr/lib/jvm/msopenjdk-current"
+export PATH="$JAVA_HOME/bin:$PATH"
+export GRADLE_OPTS="-Xmx256m -Dorg.gradle.daemon=true"
+export FINERACT_HIKARI_DRIVER_SOURCE_CLASS_NAME="org.postgresql.Driver"
+export FINERACT_HIKARI_JDBC_URL="jdbc:postgresql://localhost:5432/fineract_tenants"
+export FINERACT_HIKARI_USERNAME="postgres"
+export FINERACT_HIKARI_PASSWORD="postgres"
+export FINERACT_DEFAULT_TENANTDB_HOSTNAME="localhost"
+export FINERACT_DEFAULT_TENANTDB_PORT="5432"
+export FINERACT_DEFAULT_TENANTDB_UID="postgres"
+export FINERACT_DEFAULT_TENANTDB_PWD="postgres"
+export FINERACT_DEFAULT_TENANTDB_NAME="fineract_default"
+export FINERACT_DEFAULT_TENANTDB_IDENTIFIER="default"
+export FINERACT_SERVER_SSL_ENABLED="false"
+export FINERACT_SERVER_PORT="8080"
+export FINERACT_LIQUIBASE_ENABLED="true"
+EOF
+sudo chmod +x /etc/profile.d/fineract-env.sh
+
+# Inyectar al inicio de ~/.bashrc y ~/.profile (antes del return de shells no interactivos) para que el Agente IA y SSH siempre lo carguen
+for rc in "$HOME/.bashrc" "$HOME/.profile"; do
+  if [ -f "$rc" ] && ! grep -q "fineract-env.sh" "$rc"; then
+    tmp_rc=$(mktemp)
+    echo '[ -f /etc/profile.d/fineract-env.sh ] && . /etc/profile.d/fineract-env.sh' > "$tmp_rc"
+    cat "$rc" >> "$tmp_rc"
+    mv "$tmp_rc" "$rc"
+  fi
+done
+
+sudo tee /usr/local/bin/build-fineract > /dev/null << 'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+[ -f /etc/profile.d/fineract-env.sh ] && . /etc/profile.d/fineract-env.sh
+cd /workspaces/fineract
+echo "Compilando bootJar de Fineract (incremental con caché)..."
+./gradlew :fineract-provider:bootJar \
+  -x test -x cucumber \
+  -x checkstyleMain -x checkstyleTest \
+  -x spotbugsMain -x spotbugsTest \
+  -x spotlessCheck -x spotlessApply \
+  -x javadoc -x javadocJar \
+  -x modernizer -x rat
+EOF
+sudo chmod +x /usr/local/bin/build-fineract
+
+sudo tee /usr/local/bin/run-fineract > /dev/null << 'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+[ -f /etc/profile.d/fineract-env.sh ] && . /etc/profile.d/fineract-env.sh
+cd /workspaces/fineract
+sudo service postgresql start >/dev/null 2>&1 || true
+
+JAR_FILE=$(ls /workspaces/fineract/fineract-provider/build/libs/*.jar 2>/dev/null | grep -v "plain" | head -n 1 || true)
+if [ -z "$JAR_FILE" ]; then
+  echo "No se encontró el JAR compilado. Ejecutando build-fineract primero..."
+  build-fineract
+  JAR_FILE=$(ls /workspaces/fineract/fineract-provider/build/libs/*.jar | grep -v "plain" | head -n 1)
+fi
+
+echo "Liberando memoria del daemon de Gradle antes de iniciar Fineract..."
+./gradlew --stop >/dev/null 2>&1 || true
+
+echo "Arrancando $JAR_FILE en http://localhost:${FINERACT_SERVER_PORT}/fineract-provider ..."
+exec java \
+  -Xmx1536m \
+  -XX:MaxMetaspaceSize=512m \
+  -XX:TieredStopAtLevel=1 \
+  -XX:+UseStringDeduplication \
+  -Dfile.encoding=UTF-8 \
+  -Duser.timezone=UTC \
+  -Djava.security.egd=file:/dev/./urandom \
+  --add-exports=java.naming/com.sun.jndi.ldap=ALL-UNNAMED \
+  --add-opens=java.base/java.lang=ALL-UNNAMED \
+  --add-opens=java.base/java.lang.invoke=ALL-UNNAMED \
+  --add-opens=java.base/java.io=ALL-UNNAMED \
+  --add-opens=java.base/java.security=ALL-UNNAMED \
+  --add-opens=java.base/java.util=ALL-UNNAMED \
+  --add-opens=java.management/javax.management=ALL-UNNAMED \
+  --add-opens=java.naming/javax.naming=ALL-UNNAMED \
+  -jar "$JAR_FILE"
+EOF
+sudo chmod +x /usr/local/bin/run-fineract
+
 echo "=== Configuración de Fineract 1.15 + PostgreSQL 18 completada con éxito ==="
