@@ -85,9 +85,6 @@ public class RecurringDepositAccount extends SavingsAccount {
     @OneToOne(mappedBy = "account", cascade = CascadeType.ALL)
     private DepositAccountRecurringDetail recurringDetail;
 
-    @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL, mappedBy = "account")
-    private DepositAccountInterestRateChart chart;
-
     @OrderBy(value = "installmentNumber, id")
     @OneToMany(cascade = CascadeType.ALL, mappedBy = "account", orphanRemoval = true, fetch = FetchType.LAZY)
     private List<RecurringDepositScheduleInstallment> depositScheduleInstallments = new ArrayList<>();

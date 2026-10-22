@@ -49,6 +49,7 @@ import jakarta.persistence.InheritanceType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
@@ -98,6 +99,7 @@ import org.apache.fineract.portfolio.charge.exception.SavingsAccountChargeNotFou
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.portfolio.common.domain.PeriodFrequencyType;
 import org.apache.fineract.portfolio.group.domain.Group;
+import org.apache.fineract.portfolio.interestratechart.domain.InterestRateChart;
 import org.apache.fineract.portfolio.paymentdetail.domain.PaymentDetail;
 import org.apache.fineract.portfolio.savings.DepositAccountType;
 import org.apache.fineract.portfolio.savings.SavingsAccountTransactionType;
@@ -315,6 +317,9 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
 
     @OneToMany(cascade = CascadeType.ALL, mappedBy = "savingsAccount", orphanRemoval = true, fetch = FetchType.LAZY)
     private Set<SavingsOfficerAssignmentHistory> savingsOfficerHistory = new HashSet<>();
+
+    @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL, mappedBy = "account", orphanRemoval = true)
+    protected DepositAccountInterestRateChart chart;
 
     @Transient
     protected boolean accountNumberRequiresAutoGeneration = false;
@@ -818,7 +823,7 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
     }
 
     private boolean hasInterestCalculation() {
-        return !MathUtil.isEmpty(nominalAnnualInterestRate);
+        return !MathUtil.isEmpty(nominalAnnualInterestRate) || this.chart != null;
     }
 
     private boolean hasOverdraftInterestCalculation() {
@@ -1566,6 +1571,14 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
             actualChanges.put(SavingsApiConstants.localeParamName, localeAsInput);
             actualChanges.put(SavingsApiConstants.dateFormatParamName, dateFormat);
             this.submittedOnDate = command.localDateValueOfParameterNamed(SavingsApiConstants.submittedOnDateParamName);
+            if (!command.isChangeInLongParameterNamed(SavingsApiConstants.productIdParamName, this.product.getId())) {
+                final InterestRateChart productChart = this.product.applicableChart(this.submittedOnDate);
+                if (productChart != null) {
+                    setChart(DepositAccountInterestRateChart.from(productChart));
+                } else {
+                    setChart(null);
+                }
+            }
         }
         if (command.isChangeInStringParameterNamed(SavingsApiConstants.accountNoParamName, this.accountNumber)) {
             final String newValue = command.stringValueOfParameterNamed(SavingsApiConstants.accountNoParamName);
@@ -1870,6 +1883,12 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
     public void update(final SavingsProduct product) {
         this.product = product;
         this.minBalanceForInterestCalculation = product.minBalanceForInterestCalculation();
+        final InterestRateChart productChart = product.applicableChart(accountSubmittedOrActivationDate());
+        if (productChart != null) {
+            setChart(DepositAccountInterestRateChart.from(productChart));
+        } else {
+            setChart(null);
+        }
     }
 
     public void update(final Staff savingsOfficer) {
@@ -2156,6 +2175,17 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
 
     public BigDecimal getNominalAnnualInterestRateOverdraft() {
         return this.nominalAnnualInterestRateOverdraft;
+    }
+
+    public DepositAccountInterestRateChart getChart() {
+        return this.chart;
+    }
+
+    public void setChart(final DepositAccountInterestRateChart chart) {
+        this.chart = chart;
+        if (this.chart != null) {
+            this.chart.updateDepositAccountReference(this);
+        }
     }
 
     public Map<String, Object> approveApplication(final AppUser currentUser, final JsonCommand command) {
@@ -3382,6 +3412,9 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         transactions.size();
         charges.size();
         savingsOfficerHistory.size();
+        if (this.chart != null) {
+            this.chart.setOfChartSlabs().size();
+        }
         if (group != null) {
             Office dummyOffice = group.getOffice();
         } // Ensure lazy loading of group if set

@@ -26,7 +26,6 @@ import static org.apache.fineract.portfolio.savings.DepositsApiConstants.onAccou
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.DiscriminatorValue;
 import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Transient;
 import java.math.BigDecimal;
@@ -75,9 +74,6 @@ public class FixedDepositAccount extends SavingsAccount {
 
     @OneToOne(mappedBy = "account", cascade = CascadeType.ALL)
     private DepositAccountTermAndPreClosure accountTermAndPreClosure;
-
-    @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL, mappedBy = "account")
-    protected DepositAccountInterestRateChart chart;
 
     @Transient
     protected InterestRateChartAssembler chartAssembler;
