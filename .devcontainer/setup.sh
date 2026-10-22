@@ -116,8 +116,9 @@ sed -i 's/-Xmx12g/-Xmx4g -XX:MaxMetaspaceSize=1g/g' gradle.properties
 sed -i 's/sun.rmi.transport=null/sun.rmi.transport=ALL-UNNAMED/g' gradle.properties
 sed -i 's/#org.gradle.workers.max=4/org.gradle.workers.max=2/g' gradle.properties
 sed -i 's/greclipse()/\/\/ greclipse()/g' build.gradle
+sed -i 's/eclipse()\.configFile/\/\/ eclipse().configFile/g' build.gradle
 if [ -d "buildSrc" ]; then
-  find buildSrc -type f -name "*.gradle*" -exec sed -i 's/greclipse()/\/\/ greclipse()/g' {} +
+  find buildSrc -type f -name "*.gradle*" -exec sed -i 's/greclipse()/\/\/ greclipse()/g; s/eclipse()\.configFile/\/\/ eclipse().configFile/g' {} +
 fi
 git update-index --assume-unchanged gradle.properties build.gradle || true
 
