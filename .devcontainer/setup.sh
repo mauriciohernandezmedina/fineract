@@ -1,41 +1,35 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "=== 1. Instalando PostgreSQL 18 (requerido por Fineract 1.15) ==="
-sudo rm -f /etc/apt/sources.list.d/yarn.list
-sudo apt-get update
-sudo apt-get install -y curl ca-certificates gnupg postgresql-common
+export DEBIAN_FRONTEND=noninteractive
+APT_OPTS=("-y" "-o" "Dpkg::Options::=--force-confdef" "-o" "Dpkg::Options::=--force-confold")
 
-# Registrar repositorio oficial PGDG para instalar PostgreSQL 18 en Debian Bookworm
+echo "=== 1. Instalando PostgreSQL 18 (modo no interactivo) ==="
+sudo rm -f /etc/apt/sources.list.d/yarn.list
+sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
+sudo DEBIAN_FRONTEND=noninteractive apt-get install "${APT_OPTS[@]}" curl ca-certificates gnupg postgresql-common
+
 if [ -x /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh ]; then
-  sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
-  sudo apt-get update
-  sudo apt-get install -y postgresql-18 postgresql-client-18
+  sudo DEBIAN_FRONTEND=noninteractive YES=yes /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y < /dev/null
+  sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install "${APT_OPTS[@]}" postgresql-18 postgresql-client-18
 else
-  sudo apt-get install -y postgresql postgresql-contrib
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install "${APT_OPTS[@]}" postgresql postgresql-contrib
 fi
 
-# Configurar pg_hba.conf para permitir conexiones locales por TCP y socket sin fricción
+# Configurar pg_hba.conf para permitir conexiones locales por TCP y socket con trust
 PG_HBA_FILES=$(sudo find /etc/postgresql -name "pg_hba.conf" 2>/dev/null || true)
 for hba in $PG_HBA_FILES; do
-  sudo sed -i 's/peer/trust/g; s/scram-sha-256/md5/g' "$hba"
+  sudo sed -i -E 's/(peer|md5|scram-sha-256)/trust/g' "$hba"
 done
 
 sudo service postgresql restart
 
 echo "=== 2. Inicializando roles (postgres y root) y bases de datos de Fineract ==="
-sudo -u postgres psql -v ON_ERROR_STOP=1 <<-EOSQL
-  ALTER USER postgres WITH SUPERUSER PASSWORD 'postgres';
-  DO \$\$
-  BEGIN
-    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'root') THEN
-      CREATE ROLE root WITH SUPERUSER LOGIN PASSWORD 'postgres';
-    ELSE
-      ALTER ROLE root WITH SUPERUSER LOGIN PASSWORD 'postgres';
-    END IF;
-  END
-  \$\$;
-EOSQL
+sudo -u postgres psql -v ON_ERROR_STOP=1 -c "ALTER USER postgres WITH SUPERUSER PASSWORD 'postgres';"
+sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname = 'root'" | grep -q 1 \
+  && sudo -u postgres psql -c "ALTER ROLE root WITH SUPERUSER LOGIN PASSWORD 'postgres';" \
+  || sudo -u postgres psql -c "CREATE ROLE root WITH SUPERUSER LOGIN PASSWORD 'postgres';"
 
 sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname = 'fineract_tenants'" | grep -q 1 \
   || sudo -u postgres psql -c "CREATE DATABASE fineract_tenants OWNER postgres;"

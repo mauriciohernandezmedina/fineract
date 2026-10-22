@@ -22,6 +22,7 @@
     }
   },
   "containerEnv": {
+    "DEBIAN_FRONTEND": "noninteractive",
     "JAVA_HOME": "/usr/lib/jvm/msopenjdk-current",
     "GRADLE_OPTS": "-Xmx256m -Dorg.gradle.daemon=true",
     "FINERACT_HIKARI_DRIVER_SOURCE_CLASS_NAME": "org.postgresql.Driver",
@@ -38,8 +39,8 @@
     "FINERACT_SERVER_PORT": "8080",
     "FINERACT_LIQUIBASE_ENABLED": "true"
   },
-  "onCreateCommand": "sed -i 's/\\r$//' .devcontainer/setup.sh && bash .devcontainer/setup.sh",
-  "postStartCommand": "sudo service postgresql start",
+  "postCreateCommand": "sed -i 's/\\r$//' .devcontainer/setup.sh && bash .devcontainer/setup.sh",
+  "postStartCommand": "sudo service postgresql start || true",
   "customizations": {
     "vscode": {
       "extensions": [
