@@ -123,6 +123,19 @@ fi
 git update-index --assume-unchanged gradle.properties build.gradle || true
 
 echo "=== 5. Configurando entorno SSH persistente y comandos globales (build-fineract / run-fineract) ==="
+# Configurar sshd para mantener vivas las sesiones de Antigravity Remote-SSH y soportar múltiples canales
+if [ -d /etc/ssh ]; then
+  sudo mkdir -p /etc/ssh/sshd_config.d
+  sudo tee /etc/ssh/sshd_config.d/99-codespaces-keepalive.conf > /dev/null << 'EOF'
+ClientAliveInterval 30
+ClientAliveCountMax 10
+TCPKeepAlive yes
+MaxSessions 50
+MaxStartups 50:30:100
+EOF
+  sudo service ssh reload >/dev/null 2>&1 || sudo service ssh restart >/dev/null 2>&1 || true
+fi
+
 sudo tee /etc/profile.d/fineract-env.sh > /dev/null << 'EOF'
 export JAVA_HOME="/usr/lib/jvm/msopenjdk-current"
 export PATH="$JAVA_HOME/bin:$PATH"
