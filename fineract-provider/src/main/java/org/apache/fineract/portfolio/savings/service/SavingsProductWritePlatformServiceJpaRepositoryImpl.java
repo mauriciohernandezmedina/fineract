@@ -23,6 +23,8 @@ import static org.apache.fineract.portfolio.savings.SavingsApiConstants.accounti
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.chargesParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.taxGroupIdParamName;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import jakarta.persistence.PersistenceException;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,10 +41,13 @@ import org.apache.fineract.infrastructure.core.data.CommandProcessingResultBuild
 import org.apache.fineract.infrastructure.core.data.DataValidatorBuilder;
 import org.apache.fineract.infrastructure.core.exception.ErrorHandler;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
+import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.infrastructure.entityaccess.domain.FineractEntityAccessType;
 import org.apache.fineract.infrastructure.entityaccess.service.FineractEntityAccessUtil;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.portfolio.charge.domain.Charge;
+import org.apache.fineract.portfolio.interestratechart.data.InterestRateChartDataValidator;
+import org.apache.fineract.portfolio.interestratechart.service.InterestRateChartAssembler;
 import org.apache.fineract.portfolio.savings.DepositAccountType;
 import org.apache.fineract.portfolio.savings.SavingsApiConstants;
 import org.apache.fineract.portfolio.savings.data.SavingsProductDataValidator;
@@ -64,6 +69,9 @@ public class SavingsProductWritePlatformServiceJpaRepositoryImpl implements Savi
     private final SavingsProductAssembler savingsProductAssembler;
     private final ProductToGLAccountMappingWritePlatformService accountMappingWritePlatformService;
     private final FineractEntityAccessUtil fineractEntityAccessUtil;
+    private final InterestRateChartDataValidator chartDataValidator;
+    private final InterestRateChartAssembler chartAssembler;
+    private final FromJsonHelper fromApiJsonHelper;
 
     /*
      * Guaranteed to throw an exception no matter what the data integrity issue is.
@@ -100,6 +108,7 @@ public class SavingsProductWritePlatformServiceJpaRepositoryImpl implements Savi
 
         try {
             this.fromApiJsonDataValidator.validateForCreate(command.json());
+            validateChartsData(command);
 
             final SavingsProduct product = this.savingsProductAssembler.assemble(command);
 
@@ -137,6 +146,9 @@ public class SavingsProductWritePlatformServiceJpaRepositoryImpl implements Savi
                     .orElseThrow(() -> new SavingsProductNotFoundException(productId));
 
             this.fromApiJsonDataValidator.validateForUpdate(command.json(), product);
+            validateChartsData(command);
+
+            product.setHelpers(this.chartAssembler);
 
             final Map<String, Object> changes = product.update(command);
 
@@ -201,4 +213,30 @@ public class SavingsProductWritePlatformServiceJpaRepositoryImpl implements Savi
                 .build();
     }
 
+    private void validateChartsData(final JsonCommand command) {
+        if (command.parameterExists(SavingsApiConstants.chartsParamName)) {
+            final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
+            final DataValidatorBuilder baseDataValidator = new DataValidatorBuilder(dataValidationErrors)
+                    .resource(SAVINGS_PRODUCT_RESOURCE_NAME);
+
+            final JsonArray array = command.arrayOfParameterNamed(SavingsApiConstants.chartsParamName);
+            baseDataValidator.reset().parameter(SavingsApiConstants.chartsParamName).value(array).notNull().jsonArrayNotEmpty();
+
+            if (array != null) {
+                for (int i = 0; i < array.size(); i++) {
+                    final JsonObject chartElement = array.get(i).getAsJsonObject();
+                    final String json = this.fromApiJsonHelper.toJson(chartElement);
+                    if (!this.fromApiJsonHelper.parameterExists(SavingsApiConstants.idParamName, chartElement)) {
+                        this.chartDataValidator.validateForCreate(json, baseDataValidator);
+                    } else {
+                        this.chartDataValidator.validateForUpdate(json, baseDataValidator);
+                    }
+                }
+            }
+
+            if (!dataValidationErrors.isEmpty()) {
+                throw new PlatformApiDataValidationException(dataValidationErrors);
+            }
+        }
+    }
 }

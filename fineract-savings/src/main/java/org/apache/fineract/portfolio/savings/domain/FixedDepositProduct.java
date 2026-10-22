@@ -18,24 +18,14 @@
  */
 package org.apache.fineract.portfolio.savings.domain;
 
-import static org.apache.fineract.portfolio.interestratechart.InterestRateChartApiConstants.deleteParamName;
-import static org.apache.fineract.portfolio.interestratechart.InterestRateChartApiConstants.idParamName;
 import static org.apache.fineract.portfolio.savings.DepositsApiConstants.FIXED_DEPOSIT_PRODUCT_RESOURCE_NAME;
 import static org.apache.fineract.portfolio.savings.DepositsApiConstants.maxDepositTermParamName;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.DiscriminatorValue;
 import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.JoinTable;
-import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
-import jakarta.persistence.Transient;
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -51,9 +41,7 @@ import org.apache.fineract.infrastructure.core.data.DataValidatorBuilder;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.organisation.monetary.domain.MonetaryCurrency;
 import org.apache.fineract.portfolio.charge.domain.Charge;
-import org.apache.fineract.portfolio.interestratechart.InterestRateChartApiConstants;
 import org.apache.fineract.portfolio.interestratechart.domain.InterestRateChart;
-import org.apache.fineract.portfolio.interestratechart.service.InterestRateChartAssembler;
 import org.apache.fineract.portfolio.savings.DepositsApiConstants;
 import org.apache.fineract.portfolio.savings.SavingsCompoundingInterestPeriodType;
 import org.apache.fineract.portfolio.savings.SavingsInterestCalculationDaysInYearType;
@@ -68,13 +56,6 @@ public class FixedDepositProduct extends SavingsProduct {
 
     @OneToOne(mappedBy = "product", cascade = CascadeType.ALL)
     private DepositProductTermAndPreClosure productTermAndPreClosure;
-
-    @OneToMany(fetch = FetchType.LAZY, cascade = CascadeType.ALL)
-    @JoinTable(name = "m_deposit_product_interest_rate_chart", joinColumns = @JoinColumn(name = "deposit_product_id"), inverseJoinColumns = @JoinColumn(name = "interest_rate_chart_id", unique = true))
-    protected Set<InterestRateChart> charts;
-
-    @Transient
-    protected InterestRateChartAssembler chartAssembler;
 
     protected FixedDepositProduct() {
 
@@ -173,110 +154,10 @@ public class FixedDepositProduct extends SavingsProduct {
         return actualChanges;
     }
 
-    private void updateCharts(JsonCommand command, Map<String, Object> actualChanges, final DataValidatorBuilder baseDataValidator) {
-        final Map<String, Object> deletedCharts = new HashMap<>();
-        final Map<String, Object> chartsChanges = new HashMap<>();
-
-        if (command.hasParameter(DepositsApiConstants.chartsParamName)) {
-            final JsonArray array = command.arrayOfParameterNamed(DepositsApiConstants.chartsParamName);
-            if (array != null) {
-                for (int i = 0; i < array.size(); i++) {
-                    final JsonObject chartElement = array.get(i).getAsJsonObject();
-                    JsonCommand chartCommand = JsonCommand.fromExistingCommand(command, chartElement);
-                    if (chartCommand.parameterExists(idParamName)) {
-                        final Long chartId = chartCommand.longValueOfParameterNamed(idParamName);
-                        final InterestRateChart chart = this.findChart(chartId);
-                        if (chart == null) {
-                            baseDataValidator.parameter(idParamName).value(chartId).failWithCode("no.chart.associated.with.id");
-                        } else if (chartCommand.parameterExists(deleteParamName)) {
-                            if (this.removeChart(chart)) {
-                                deletedCharts.put(idParamName, chartId);
-                            }
-                        } else {
-                            chart.update(chartCommand, chartsChanges, baseDataValidator, this.setOfCharts(), this.currency().getCode());
-                        }
-                    } else {
-                        // assemble chart
-                        final InterestRateChart newChart = this.chartAssembler.assembleFrom(chartElement, this.currency().getCode(),
-                                baseDataValidator);
-                        this.addChart(newChart);
-                    }
-                }
-            }
-        }
-
-        // this.validateCharts(baseDataValidator);
-
-        // add chart changes to actual changes list.
-        if (!chartsChanges.isEmpty()) {
-            actualChanges.put(InterestRateChartApiConstants.chartSlabs, chartsChanges);
-        }
-
-        // add deleted chart to actual changes
-        if (!deletedCharts.isEmpty()) {
-            actualChanges.put("deletedChartSlabs", deletedCharts);
-        }
-    }
-
     private void throwExceptionIfValidationWarningsExist(final List<ApiParameterError> dataValidationErrors) {
         if (!dataValidationErrors.isEmpty()) {
             throw new PlatformApiDataValidationException(dataValidationErrors);
         }
-    }
-
-    @Override
-    public InterestRateChart findChart(Long chartId) {
-        final Set<InterestRateChart> charts = setOfCharts();
-
-        for (InterestRateChart chart : charts) {
-            if (chart.getId().equals(chartId)) {
-                return chart;
-            }
-        }
-        return null;
-    }
-
-    private boolean removeChart(InterestRateChart chart) {
-        Set<InterestRateChart> charts = setOfCharts();
-        return charts.remove(chart);
-    }
-
-    public void setHelpers(final InterestRateChartAssembler chartAssembler) {
-        this.chartAssembler = chartAssembler;
-    }
-
-    public void validateCharts(final DataValidatorBuilder baseDataValidator) {
-        final Set<InterestRateChart> charts = this.setOfCharts();
-        for (InterestRateChart existingChart : charts) {
-            this.validateChart(baseDataValidator, existingChart);
-        }
-    }
-
-    public void validateChart(final DataValidatorBuilder baseDataValidator, final InterestRateChart comparingChart) {
-        final Set<InterestRateChart> charts = this.setOfCharts();
-        for (InterestRateChart existingChart : charts) {
-            if (!existingChart.equals(comparingChart)) {
-                if (existingChart.chartFields().isOverlapping(comparingChart.chartFields())) {
-                    baseDataValidator.failWithCodeNoParameterAddedToErrorCode("chart.overlapping.from.and.end.dates",
-                            existingChart.getFromDate(), existingChart.getEndDate(), comparingChart.getFromDate(),
-                            comparingChart.getEndDate());
-                }
-            }
-        }
-    }
-
-    @Override
-    public InterestRateChart applicableChart(final LocalDate target) {
-        InterestRateChart applicableChart = null;
-        if (this.charts != null) {
-            for (InterestRateChart chart : this.charts) {
-                if (chart.isApplicableChartFor(target)) {
-                    applicableChart = chart;
-                    break;
-                }
-            }
-        }
-        return applicableChart;
     }
 
     public DepositProductTermAndPreClosure depositProductTermAndPreClosure() {

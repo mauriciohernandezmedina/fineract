@@ -18,10 +18,13 @@
  */
 package org.apache.fineract.portfolio.savings.domain;
 
+import static org.apache.fineract.portfolio.interestratechart.InterestRateChartApiConstants.deleteParamName;
+import static org.apache.fineract.portfolio.interestratechart.InterestRateChartApiConstants.idParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.SAVINGS_PRODUCT_RESOURCE_NAME;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.accountingRuleParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.allowOverdraftParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.chargesParamName;
+import static org.apache.fineract.portfolio.savings.SavingsApiConstants.chartsParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.currencyCodeParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.daysToDormancyParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.daysToEscheatParamName;
@@ -54,22 +57,28 @@ import static org.apache.fineract.portfolio.savings.SavingsApiConstants.withHold
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.withdrawalFeeForTransfersParamName;
 
 import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.DiscriminatorColumn;
 import jakarta.persistence.DiscriminatorType;
 import jakarta.persistence.DiscriminatorValue;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Inheritance;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -84,7 +93,9 @@ import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidati
 import org.apache.fineract.organisation.monetary.domain.MonetaryCurrency;
 import org.apache.fineract.organisation.monetary.domain.Money;
 import org.apache.fineract.portfolio.charge.domain.Charge;
+import org.apache.fineract.portfolio.interestratechart.InterestRateChartApiConstants;
 import org.apache.fineract.portfolio.interestratechart.domain.InterestRateChart;
+import org.apache.fineract.portfolio.interestratechart.service.InterestRateChartAssembler;
 import org.apache.fineract.portfolio.savings.SavingsCompoundingInterestPeriodType;
 import org.apache.fineract.portfolio.savings.SavingsInterestCalculationDaysInYearType;
 import org.apache.fineract.portfolio.savings.SavingsInterestCalculationType;
@@ -208,6 +219,17 @@ public class SavingsProduct extends AbstractPersistableCustom<Long> {
 
     @Column(name = "days_to_escheat")
     private Long daysToEscheat;
+
+    @OneToMany(fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    @JoinTable(name = "m_deposit_product_interest_rate_chart", joinColumns = @JoinColumn(name = "deposit_product_id"), inverseJoinColumns = @JoinColumn(name = "interest_rate_chart_id", unique = true))
+    protected Set<InterestRateChart> charts;
+
+    @Transient
+    protected InterestRateChartAssembler chartAssembler;
+
+    public void setHelpers(final InterestRateChartAssembler chartAssembler) {
+        this.chartAssembler = chartAssembler;
+    }
 
     public static SavingsProduct createNew(final String name, final String shortName, final String description,
             final MonetaryCurrency currency, final BigDecimal interestRate,
@@ -616,10 +638,68 @@ public class SavingsProduct extends AbstractPersistableCustom<Long> {
             this.daysToEscheat = null;
         }
 
+        // update chart Slabs
+        if (!(this instanceof FixedDepositProduct) && command.hasParameter(chartsParamName)) {
+            final List<ApiParameterError> chartValidationErrors = new ArrayList<>();
+            final DataValidatorBuilder baseDataValidator = new DataValidatorBuilder(chartValidationErrors)
+                    .resource(SAVINGS_PRODUCT_RESOURCE_NAME);
+            updateCharts(command, actualChanges, baseDataValidator);
+            if (!chartValidationErrors.isEmpty()) {
+                throw new PlatformApiDataValidationException(chartValidationErrors);
+            }
+        }
+
         validateLockinDetails();
         esnureOverdraftLimitsSetForOverdraftAccounts();
 
         return actualChanges;
+    }
+
+    protected void updateCharts(final JsonCommand command, final Map<String, Object> actualChanges,
+            final DataValidatorBuilder baseDataValidator) {
+        final Map<String, Object> deletedCharts = new HashMap<>();
+        final Map<String, Object> chartsChanges = new HashMap<>();
+
+        if (command.hasParameter(chartsParamName)) {
+            final JsonArray array = command.arrayOfParameterNamed(chartsParamName);
+            if (array != null) {
+                for (int i = 0; i < array.size(); i++) {
+                    final JsonObject chartElement = array.get(i).getAsJsonObject();
+                    JsonCommand chartCommand = JsonCommand.fromExistingCommand(command, chartElement);
+                    if (chartCommand.parameterExists(idParamName)) {
+                        final Long chartId = chartCommand.longValueOfParameterNamed(idParamName);
+                        final InterestRateChart chart = this.findChart(chartId);
+                        if (chart == null) {
+                            baseDataValidator.parameter(idParamName).value(chartId).failWithCode("no.chart.associated.with.id");
+                        } else if (chartCommand.parameterExists(deleteParamName)) {
+                            if (this.removeChart(chart)) {
+                                deletedCharts.put(idParamName, chartId);
+                            }
+                        } else {
+                            chart.update(chartCommand, chartsChanges, baseDataValidator, this.setOfCharts(), this.currency().getCode());
+                        }
+                    } else if (this.chartAssembler != null) {
+                        // assemble chart
+                        final InterestRateChart newChart = this.chartAssembler.assembleFrom(chartElement, this.currency().getCode(),
+                                baseDataValidator);
+                        this.addChart(newChart);
+                        actualChanges.put(chartsParamName, command.jsonFragment(chartsParamName));
+                    }
+                }
+            }
+        }
+
+        this.validateCharts(baseDataValidator);
+
+        // add chart changes to actual changes list.
+        if (!chartsChanges.isEmpty()) {
+            actualChanges.put(InterestRateChartApiConstants.chartSlabs, chartsChanges);
+        }
+
+        // add deleted chart to actual changes
+        if (!deletedCharts.isEmpty()) {
+            actualChanges.put("deletedChartSlabs", deletedCharts);
+        }
     }
 
     private void validateLockinDetails() {
@@ -723,12 +803,70 @@ public class SavingsProduct extends AbstractPersistableCustom<Long> {
         return this.charges;
     }
 
-    public InterestRateChart applicableChart(@SuppressWarnings("unused") final LocalDate target) {
+    public void addCharts(final Set<InterestRateChart> newCharts) {
+        final Set<InterestRateChart> existingCharts = setOfCharts();
+        existingCharts.addAll(newCharts);
+    }
+
+    public void addChart(final InterestRateChart newChart) {
+        final Set<InterestRateChart> existingCharts = setOfCharts();
+        existingCharts.add(newChart);
+    }
+
+    public Set<InterestRateChart> setOfCharts() {
+        if (this.charts == null) {
+            this.charts = new HashSet<>();
+        }
+        return this.charts;
+    }
+
+    public InterestRateChart findChart(Long chartId) {
+        final Set<InterestRateChart> existingCharts = setOfCharts();
+
+        for (InterestRateChart chart : existingCharts) {
+            if (chart.getId().equals(chartId)) {
+                return chart;
+            }
+        }
         return null;
     }
 
-    public InterestRateChart findChart(@SuppressWarnings("unused") Long chartId) {
-        return null;
+    protected boolean removeChart(InterestRateChart chart) {
+        Set<InterestRateChart> existingCharts = setOfCharts();
+        return existingCharts.remove(chart);
+    }
+
+    public InterestRateChart applicableChart(final LocalDate target) {
+        InterestRateChart applicableChart = null;
+        if (this.charts != null) {
+            for (InterestRateChart chart : this.charts) {
+                if (chart.isApplicableChartFor(target)) {
+                    applicableChart = chart;
+                    break;
+                }
+            }
+        }
+        return applicableChart;
+    }
+
+    public void validateCharts(final DataValidatorBuilder baseDataValidator) {
+        final Set<InterestRateChart> charts = this.setOfCharts();
+        for (InterestRateChart existingChart : charts) {
+            this.validateChart(baseDataValidator, existingChart);
+        }
+    }
+
+    public void validateChart(final DataValidatorBuilder baseDataValidator, final InterestRateChart comparingChart) {
+        final Set<InterestRateChart> charts = this.setOfCharts();
+        for (InterestRateChart existingChart : charts) {
+            if (!existingChart.equals(comparingChart)) {
+                if (existingChart.chartFields().isOverlapping(comparingChart.chartFields())) {
+                    baseDataValidator.failWithCodeNoParameterAddedToErrorCode("chart.overlapping.from.and.end.dates",
+                            existingChart.getFromDate(), existingChart.getEndDate(), comparingChart.getFromDate(),
+                            comparingChart.getEndDate());
+                }
+            }
+        }
     }
 
     public BigDecimal minBalanceForInterestCalculation() {
