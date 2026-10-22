@@ -47,12 +47,19 @@
         "humao.rest-client"
       ],
       "settings": {
-        "java.jdt.ls.java.home": "/usr/lib/jvm/msopenjdk-current",
+        "java.configuration.runtimes": [
+          {
+            "name": "JavaSE-21",
+            "path": "/usr/lib/jvm/msopenjdk-current",
+            "default": true
+          }
+        ],
         "java.import.gradle.java.home": "/usr/lib/jvm/msopenjdk-current",
         "java.autobuild.enabled": false,
         "java.import.gradle.enabled": false,
         "java.gradle.buildServer.enabled": "off",
         "gradle.autoDetect": "off",
+        "gradle.disable": true,
         "files.watcherExclude": {
           "**/.git/objects/**": true,
           "**/.git/subtree-cache/**": true,

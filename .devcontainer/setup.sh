@@ -4,6 +4,12 @@ set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 APT_OPTS=("-y" "-o" "Dpkg::Options::=--force-confdef" "-o" "Dpkg::Options::=--force-confold")
 
+echo "=== 0. Asegurando tags de Git en clon superficial (requerido por git-versioning) ==="
+git fetch --depth=25 origin +refs/tags/1.15.0:refs/tags/1.15.0 2>/dev/null || true
+if ! git describe --tags --match "*[0-9].[0-9]*.[0-9]*" >/dev/null 2>&1; then
+  git tag -f 1.15.0 HEAD
+fi
+
 echo "=== 1. Instalando PostgreSQL 18 (modo no interactivo) ==="
 sudo rm -f /etc/apt/sources.list.d/yarn.list
 sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
@@ -26,18 +32,19 @@ done
 sudo service postgresql restart
 
 echo "=== 2. Inicializando roles (postgres y root) y bases de datos de Fineract ==="
-sudo -u postgres psql -v ON_ERROR_STOP=1 -c "ALTER USER postgres WITH SUPERUSER PASSWORD 'postgres';"
-sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname = 'root'" | grep -q 1 \
-  && sudo -u postgres psql -c "ALTER ROLE root WITH SUPERUSER LOGIN PASSWORD 'postgres';" \
-  || sudo -u postgres psql -c "CREATE ROLE root WITH SUPERUSER LOGIN PASSWORD 'postgres';"
+# Nota: Usamos 'psql -h 127.0.0.1 -U postgres' (con pg_hba.conf en trust) para evitar 'sudo -u postgres' que pide password en devcontainers
+psql -h 127.0.0.1 -U postgres -v ON_ERROR_STOP=1 -c "ALTER USER postgres WITH SUPERUSER PASSWORD 'postgres';"
+psql -h 127.0.0.1 -U postgres -tc "SELECT 1 FROM pg_roles WHERE rolname = 'root'" | grep -q 1 \
+  && psql -h 127.0.0.1 -U postgres -c "ALTER ROLE root WITH SUPERUSER LOGIN PASSWORD 'postgres';" \
+  || psql -h 127.0.0.1 -U postgres -c "CREATE ROLE root WITH SUPERUSER LOGIN PASSWORD 'postgres';"
 
-sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname = 'fineract_tenants'" | grep -q 1 \
-  || sudo -u postgres psql -c "CREATE DATABASE fineract_tenants OWNER postgres;"
-sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname = 'fineract_default'" | grep -q 1 \
-  || sudo -u postgres psql -c "CREATE DATABASE fineract_default OWNER postgres;"
+psql -h 127.0.0.1 -U postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'fineract_tenants'" | grep -q 1 \
+  || psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE fineract_tenants OWNER postgres;"
+psql -h 127.0.0.1 -U postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'fineract_default'" | grep -q 1 \
+  || psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE fineract_default OWNER postgres;"
 
-sudo -u postgres psql -d fineract_tenants -c "GRANT ALL ON SCHEMA public TO postgres, root;"
-sudo -u postgres psql -d fineract_default -c "GRANT ALL ON SCHEMA public TO postgres, root;"
+psql -h 127.0.0.1 -U postgres -d fineract_tenants -c "GRANT ALL ON SCHEMA public TO postgres, root;"
+psql -h 127.0.0.1 -U postgres -d fineract_default -c "GRANT ALL ON SCHEMA public TO postgres, root;"
 
 echo "=== 3. Configurando Gradle 8.14.5 y JDK 21 para Codespaces (16GB RAM / 4 vCPU) ==="
 mkdir -p ~/.gradle/init.d
