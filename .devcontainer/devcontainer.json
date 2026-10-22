@@ -1,6 +1,11 @@
 {
   "name": "Fineract 1.15 (JDK 21 + PostgreSQL 18)",
   "image": "mcr.microsoft.com/devcontainers/java:1-21-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/sshd:1": {
+      "version": "latest"
+    }
+  },
   "hostRequirements": {
     "cpus": 4,
     "memory": "16gb",
