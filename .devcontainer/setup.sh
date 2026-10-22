@@ -11,20 +11,24 @@ if ! git describe --tags --match "*[0-9].[0-9]*.[0-9]*" >/dev/null 2>&1; then
 fi
 
 echo "=== 1. Instalando PostgreSQL 18 (modo no interactivo) ==="
-sudo rm -f /etc/apt/sources.list.d/yarn.list
-sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
-sudo DEBIAN_FRONTEND=noninteractive apt-get install "${APT_OPTS[@]}" curl ca-certificates gnupg postgresql-common
-
-if [ -x /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh ]; then
-  sudo DEBIAN_FRONTEND=noninteractive YES=yes /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y < /dev/null
+if ! dpkg -s postgresql-18 >/dev/null 2>&1; then
+  sudo rm -f /etc/apt/sources.list.d/yarn.list
   sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
-  sudo DEBIAN_FRONTEND=noninteractive apt-get install "${APT_OPTS[@]}" postgresql-18 postgresql-client-18
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install "${APT_OPTS[@]}" curl ca-certificates gnupg postgresql-common
+
+  if [ -x /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh ]; then
+    sudo DEBIAN_FRONTEND=noninteractive YES=yes /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y < /dev/null
+    sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install "${APT_OPTS[@]}" postgresql-18 postgresql-client-18
+  else
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install "${APT_OPTS[@]}" postgresql postgresql-contrib
+  fi
 else
-  sudo DEBIAN_FRONTEND=noninteractive apt-get install "${APT_OPTS[@]}" postgresql postgresql-contrib
+  echo "PostgreSQL 18 ya está instalado."
 fi
 
 # Configurar pg_hba.conf para permitir conexiones locales por TCP y socket con trust
-PG_HBA_FILES=$(sudo find /etc/postgresql -name "pg_hba.conf" 2>/dev/null || true)
+PG_HBA_FILES=$(sudo find /etc/postgresql -type f -name "pg_hba.conf" 2>/dev/null || true)
 for hba in $PG_HBA_FILES; do
   sudo sed -i -E 's/(peer|md5|scram-sha-256)/trust/g' "$hba"
 done
@@ -32,7 +36,6 @@ done
 sudo service postgresql restart
 
 echo "=== 2. Inicializando roles (postgres y root) y bases de datos de Fineract ==="
-# Nota: Usamos 'psql -h 127.0.0.1 -U postgres' (con pg_hba.conf en trust) para evitar 'sudo -u postgres' que pide password en devcontainers
 psql -h 127.0.0.1 -U postgres -v ON_ERROR_STOP=1 -c "ALTER USER postgres WITH SUPERUSER PASSWORD 'postgres';"
 psql -h 127.0.0.1 -U postgres -tc "SELECT 1 FROM pg_roles WHERE rolname = 'root'" | grep -q 1 \
   && psql -h 127.0.0.1 -U postgres -c "ALTER ROLE root WITH SUPERUSER LOGIN PASSWORD 'postgres';" \
@@ -114,7 +117,7 @@ sed -i 's/sun.rmi.transport=null/sun.rmi.transport=ALL-UNNAMED/g' gradle.propert
 sed -i 's/#org.gradle.workers.max=4/org.gradle.workers.max=2/g' gradle.properties
 sed -i 's/greclipse()/\/\/ greclipse()/g' build.gradle
 if [ -d "buildSrc" ]; then
-  find buildSrc -name "*.gradle*" -exec sed -i 's/greclipse()/\/\/ greclipse()/g' {} +
+  find buildSrc -type f -name "*.gradle*" -exec sed -i 's/greclipse()/\/\/ greclipse()/g' {} +
 fi
 git update-index --assume-unchanged gradle.properties build.gradle || true
 
