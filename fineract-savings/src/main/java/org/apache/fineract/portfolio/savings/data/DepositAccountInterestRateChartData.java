@@ -18,9 +18,11 @@
  */
 package org.apache.fineract.portfolio.savings.data;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
+import lombok.Getter;
 import org.apache.fineract.infrastructure.codes.data.CodeValueData;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
@@ -30,6 +32,7 @@ import org.apache.fineract.portfolio.interestratechart.data.InterestRateChartSla
 /**
  * Immutable data object representing a deposit account interest rate chart.
  */
+@Getter
 public final class DepositAccountInterestRateChartData {
 
     private final Long id;
@@ -37,6 +40,7 @@ public final class DepositAccountInterestRateChartData {
     private final String description;
     private final LocalDate fromDate;
     private final LocalDate endDate;
+    @JsonProperty("isPrimaryGroupingByAmount")
     private final boolean isPrimaryGroupingByAmount;
     private final Long accountId;
     private final String accountNumber;

@@ -86,6 +86,19 @@ public final class SavingsProductData implements Serializable {
     private String depositAccountType = null;
     private final String accountMappingForPayment;
 
+    @Getter
+    @Setter
+    private Collection<?> charts;
+    @Getter
+    @Setter
+    private Collection<?> interestRateCharts;
+    @Getter
+    @Setter
+    private Object activeChart;
+    @Getter
+    @Setter
+    private Object chartTemplate;
+
     // accounting
     private final EnumOptionData accountingRule;
     private final Map<String, Object> accountingMappings;
@@ -171,7 +184,7 @@ public final class SavingsProductData implements Serializable {
     }
 
     public static SavingsProductData withCharges(final SavingsProductData product, final Collection<ChargeData> charges) {
-        return new SavingsProductData(product.id, product.name, product.shortName, product.description, product.currency,
+        final SavingsProductData result = new SavingsProductData(product.id, product.name, product.shortName, product.description, product.currency,
                 product.nominalAnnualInterestRate, product.interestCompoundingPeriodType, product.interestPostingPeriodType,
                 product.interestCalculationType, product.interestCalculationDaysInYearType, product.minRequiredOpeningBalance,
                 product.lockinPeriodFrequency, product.lockinPeriodFrequencyType, product.withdrawalFeeForTransfers, product.accountingRule,
@@ -186,6 +199,11 @@ public final class SavingsProductData implements Serializable {
                 product.minOverdraftForInterestCalculation, product.withHoldTax, product.taxGroup, product.taxGroupOptions,
                 product.isDormancyTrackingActive, product.daysToInactive, product.daysToDormancy, product.daysToEscheat,
                 product.accountMappingForPayment);
+        result.setCharts(product.charts);
+        result.setInterestRateCharts(product.interestRateCharts);
+        result.setActiveChart(product.activeChart);
+        result.setChartTemplate(product.chartTemplate);
+        return result;
     }
 
     /**
@@ -202,7 +220,7 @@ public final class SavingsProductData implements Serializable {
             final Map<String, List<GLAccountData>> accountingMappingOptions, final Collection<ChargeData> chargeOptions,
             final Collection<ChargeData> penaltyOptions, Collection<TaxGroupData> taxGroupOptions, final String accountMappingForPayment) {
 
-        return new SavingsProductData(existingProduct.id, existingProduct.name, existingProduct.shortName, existingProduct.description,
+        final SavingsProductData result = new SavingsProductData(existingProduct.id, existingProduct.name, existingProduct.shortName, existingProduct.description,
                 existingProduct.currency, existingProduct.nominalAnnualInterestRate, existingProduct.interestCompoundingPeriodType,
                 existingProduct.interestPostingPeriodType, existingProduct.interestCalculationType,
                 existingProduct.interestCalculationDaysInYearType, existingProduct.minRequiredOpeningBalance,
@@ -217,6 +235,11 @@ public final class SavingsProductData implements Serializable {
                 existingProduct.nominalAnnualInterestRateOverdraft, existingProduct.minOverdraftForInterestCalculation,
                 existingProduct.withHoldTax, existingProduct.taxGroup, taxGroupOptions, existingProduct.isDormancyTrackingActive,
                 existingProduct.daysToInactive, existingProduct.daysToDormancy, existingProduct.daysToEscheat, accountMappingForPayment);
+        result.setCharts(existingProduct.charts);
+        result.setInterestRateCharts(existingProduct.interestRateCharts);
+        result.setActiveChart(existingProduct.activeChart);
+        result.setChartTemplate(existingProduct.chartTemplate);
+        return result;
     }
 
     public static SavingsProductData withAccountingDetails(final SavingsProductData existingProduct,
@@ -237,7 +260,7 @@ public final class SavingsProductData implements Serializable {
         final Collection<ChargeData> chargeOptions = null;
         final Collection<ChargeData> penaltyOptions = null;
 
-        return new SavingsProductData(existingProduct.id, existingProduct.name, existingProduct.shortName, existingProduct.description,
+        final SavingsProductData result = new SavingsProductData(existingProduct.id, existingProduct.name, existingProduct.shortName, existingProduct.description,
                 existingProduct.currency, existingProduct.nominalAnnualInterestRate, existingProduct.interestCompoundingPeriodType,
                 existingProduct.interestPostingPeriodType, existingProduct.interestCalculationType,
                 existingProduct.interestCalculationDaysInYearType, existingProduct.minRequiredOpeningBalance,
@@ -253,6 +276,11 @@ public final class SavingsProductData implements Serializable {
                 existingProduct.withHoldTax, existingProduct.taxGroup, existingProduct.taxGroupOptions,
                 existingProduct.isDormancyTrackingActive, existingProduct.daysToInactive, existingProduct.daysToDormancy,
                 existingProduct.daysToEscheat, existingProduct.accountMappingForPayment);
+        result.setCharts(existingProduct.charts);
+        result.setInterestRateCharts(existingProduct.interestRateCharts);
+        result.setActiveChart(existingProduct.activeChart);
+        result.setChartTemplate(existingProduct.chartTemplate);
+        return result;
     }
 
     public static SavingsProductData instance(final Long id, final String name, final String shortName, final String description,
@@ -511,11 +539,11 @@ public final class SavingsProductData implements Serializable {
     }
 
     public boolean hasAccountingEnabled() {
-        return this.accountingRule.getId() > AccountingRuleType.NONE.getValue();
+        return this.accountingRule != null && this.accountingRule.getId() > AccountingRuleType.NONE.getValue();
     }
 
     public int accountingRuleTypeId() {
-        return this.accountingRule.getId().intValue();
+        return this.accountingRule != null ? this.accountingRule.getId().intValue() : 0;
     }
 
     @Override
@@ -532,7 +560,8 @@ public final class SavingsProductData implements Serializable {
     }
 
     public boolean isCashBasedAccountingEnabled() {
-        return AccountingRuleType.CASH_BASED.getValue().toString().equals(this.accountingRule.getValue());
+        return this.accountingRule != null
+                && AccountingRuleType.CASH_BASED.getValue().toString().equals(this.accountingRule.getValue());
     }
 
     public boolean isAccrualBasedAccountingEnabled() {
@@ -540,11 +569,13 @@ public final class SavingsProductData implements Serializable {
     }
 
     public boolean isUpfrontAccrualAccounting() {
-        return AccountingRuleType.ACCRUAL_UPFRONT.getValue().toString().equals(this.accountingRule.getValue());
+        return this.accountingRule != null
+                && AccountingRuleType.ACCRUAL_UPFRONT.getValue().toString().equals(this.accountingRule.getValue());
     }
 
     public boolean isPeriodicAccrualAccounting() {
-        return AccountingRuleType.ACCRUAL_PERIODIC.getValue().toString().equals(this.accountingRule.getValue());
+        return this.accountingRule != null
+                && AccountingRuleType.ACCRUAL_PERIODIC.getValue().toString().equals(this.accountingRule.getValue());
     }
 
 }

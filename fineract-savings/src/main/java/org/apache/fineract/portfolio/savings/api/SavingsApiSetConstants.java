@@ -21,6 +21,7 @@ package org.apache.fineract.portfolio.savings.api;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
+import org.apache.fineract.portfolio.savings.DepositsApiConstants;
 import org.apache.fineract.portfolio.savings.SavingsApiConstants;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountData;
 import org.apache.fineract.portfolio.savings.data.SavingsProductData;
@@ -41,7 +42,9 @@ public class SavingsApiSetConstants extends SavingsApiConstants {
                     "interestCalculationTypeOptions", "interestCalculationDaysInYearTypeOptions", "lockinPeriodFrequencyTypeOptions",
                     "withdrawalFeeTypeOptions", nominalAnnualInterestRateOverdraftParamName, minOverdraftForInterestCalculationParamName,
                     withHoldTaxParamName, taxGroupIdParamName, isDormancyTrackingActiveParamName, daysToInactiveParamName,
-                    daysToDormancyParamName, daysToInactiveParamName, accountMappingForPaymentParamName));
+                    daysToDormancyParamName, daysToInactiveParamName, accountMappingForPaymentParamName,
+                    DepositsApiConstants.chartsParamName, "interestRateCharts", "activeChart",
+                    DepositsApiConstants.chartTemplateParamName));
 
     /**
      * These parameters will match the class level parameters of {@link SavingsAccountData}. Where possible, we try to
@@ -57,7 +60,8 @@ public class SavingsApiSetConstants extends SavingsApiConstants {
             "interestPostingPeriodTypeOptions", "interestCalculationTypeOptions", "interestCalculationDaysInYearTypeOptions",
             "lockinPeriodFrequencyTypeOptions", "withdrawalFeeTypeOptions", "withdrawalFee", "annualFee", onHoldFundsParamName,
             nominalAnnualInterestRateOverdraftParamName, minOverdraftForInterestCalculationParamName, datatables, savingsAmountOnHold,
-            accountMappingForPaymentParamName, interestPostedTillDate));
+            accountMappingForPaymentParamName, interestPostedTillDate, DepositsApiConstants.accountChartParamName,
+            DepositsApiConstants.chartTemplateParamName));
 
     protected static final Set<String> SAVINGS_TRANSACTION_RESPONSE_DATA_PARAMETERS = new HashSet<>(
             Arrays.asList(idParamName, "accountId", accountNoParamName, externalIdParamName, "currency", "amount", dateParamName,

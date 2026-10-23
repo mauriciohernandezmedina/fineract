@@ -97,7 +97,7 @@ Fineract 1.15 enforces strict Gradle module dependencies:
 
 ---
 
-## PHASE 4: Expose Embedded Charts in `GET /v1/savingsproducts/{id}` and `GET /v1/savingsaccounts/{id}` (Mifos Web App Compatibility)
+## PHASE 4: Expose Embedded Charts in `GET /v1/savingsproducts/{id}` and `GET /v1/savingsaccounts/{id}` (Mifos Web App Compatibility) (COMPLETED)
 
 ### Architectural Design (Respecting `fineract-core` <- `fineract-savings` <- `fineract-provider` Boundary)
 - Mifos Web App expects interest rate chart data (`charts`, `interestRateCharts`, `activeChart`, `chartTemplate` on products, and `accountChart`, `chartTemplate` on accounts) embedded directly in the JSON payload of `GET /v1/savingsproducts/{id}` (and `/template`) and `GET /v1/savingsaccounts/{id}` (and `/template`), matching the structure returned by `FixedDepositProductsApiResource` and `FixedDepositAccountsApiResource`.

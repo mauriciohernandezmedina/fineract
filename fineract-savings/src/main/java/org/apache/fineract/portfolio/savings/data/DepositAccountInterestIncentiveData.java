@@ -19,9 +19,11 @@
 package org.apache.fineract.portfolio.savings.data;
 
 import java.math.BigDecimal;
+import lombok.Getter;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 import org.apache.fineract.portfolio.interestratechart.data.InterestIncentiveData;
 
+@Getter
 public final class DepositAccountInterestIncentiveData {
 
     @SuppressWarnings("unused")

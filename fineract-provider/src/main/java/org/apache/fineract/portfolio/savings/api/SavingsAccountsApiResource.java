@@ -65,12 +65,17 @@ import org.apache.fineract.infrastructure.core.service.Page;
 import org.apache.fineract.infrastructure.core.service.SearchParameters;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.infrastructure.security.service.SqlValidator;
+import org.apache.fineract.portfolio.interestratechart.data.InterestRateChartData;
+import org.apache.fineract.portfolio.interestratechart.service.InterestRateChartReadService;
 import org.apache.fineract.portfolio.savings.DepositAccountType;
 import org.apache.fineract.portfolio.savings.SavingsApiConstants;
+import org.apache.fineract.portfolio.savings.data.DepositAccountInterestRateChartData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountChargeData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionData;
+import org.apache.fineract.portfolio.savings.exception.DepositAccountInterestRateChartNotFoundException;
 import org.apache.fineract.portfolio.savings.exception.SavingsAccountNotFoundException;
+import org.apache.fineract.portfolio.savings.service.DepositAccountInterestRateChartReadPlatformService;
 import org.apache.fineract.portfolio.savings.service.SavingsAccountChargeReadPlatformService;
 import org.apache.fineract.portfolio.savings.service.SavingsAccountReadPlatformService;
 import org.apache.fineract.portfolio.savings.service.SavingsAccountTemplateReadPlatformService;
@@ -95,6 +100,8 @@ public class SavingsAccountsApiResource {
     private final BulkImportWorkbookService bulkImportWorkbookService;
     private final BulkImportWorkbookPopulatorService bulkImportWorkbookPopulatorService;
     private final SqlValidator sqlValidator;
+    private final InterestRateChartReadService productChartReadPlatformService;
+    private final DepositAccountInterestRateChartReadPlatformService accountChartReadPlatformService;
 
     @GET
     @Path("template")
@@ -114,6 +121,14 @@ public class SavingsAccountsApiResource {
 
         final SavingsAccountData savingsAccount = savingsAccountTemplateReadPlatformService.retrieveTemplate(clientId, groupId, productId,
                 staffInSelectedOfficeOnly);
+
+        if (productId != null) {
+            final InterestRateChartData productChartData = this.productChartReadPlatformService.retrieveActiveChartWithTemplate(productId);
+            if (productChartData != null) {
+                savingsAccount.setAccountChart(DepositAccountInterestRateChartData.from(productChartData));
+            }
+        }
+        savingsAccount.setChartTemplate(this.accountChartReadPlatformService.template());
 
         final ApiRequestJsonSerializationSettings settings = apiRequestParameterHelper.process(uriInfo.getQueryParameters());
         return toApiJsonSerializer.serialize(settings, savingsAccount, SavingsApiSetConstants.SAVINGS_ACCOUNT_RESPONSE_DATA_PARAMETERS);
@@ -609,7 +624,7 @@ public class SavingsAccountsApiResource {
         return resolvedAccountId;
     }
 
-    private SavingsAccountData populateTemplateAndAssociations(final Long accountId, final SavingsAccountData savingsAccount,
+    private SavingsAccountData populateTemplateAndAssociations(final Long accountId, SavingsAccountData savingsAccount,
             final boolean staffInSelectedOfficeOnly, final String chargeStatus, final UriInfo uriInfo) {
 
         Collection<SavingsAccountTransactionData> transactions = null;
@@ -646,6 +661,22 @@ public class SavingsAccountsApiResource {
                     savingsAccount.getGroupId(), savingsAccount.getSavingsProductId(), staffInSelectedOfficeOnly);
         }
 
-        return SavingsAccountData.withTemplateOptions(savingsAccount, templateData, transactions, charges);
+        savingsAccount = SavingsAccountData.withTemplateOptions(savingsAccount, templateData, transactions, charges);
+
+        DepositAccountInterestRateChartData accountChart = null;
+        try {
+            accountChart = this.accountChartReadPlatformService.retrieveOneWithSlabsOnAccountId(accountId);
+        } catch (final DepositAccountInterestRateChartNotFoundException e) {
+            // Standard savings account without an interest rate chart
+        }
+        if (settings.isTemplate()) {
+            if (accountChart != null) {
+                accountChart = this.accountChartReadPlatformService.retrieveWithTemplate(accountChart);
+            }
+            savingsAccount.setChartTemplate(this.accountChartReadPlatformService.template());
+        }
+        savingsAccount.setAccountChart(accountChart);
+
+        return savingsAccount;
     }
 }

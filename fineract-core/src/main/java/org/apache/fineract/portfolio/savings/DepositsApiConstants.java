@@ -212,6 +212,8 @@ public final class DepositsApiConstants {
 
     // template
     public static final String chartTemplate = "chartTemplate";
+    public static final String chartTemplateParamName = "chartTemplate";
+    public static final String accountChartParamName = "accountChart";
 
     /**
      * Deposit Product Parameters
