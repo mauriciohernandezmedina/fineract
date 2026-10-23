@@ -72,6 +72,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
@@ -787,6 +788,7 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
                         interestRateAsFraction, daysInYearType.getValue(), upToInterestCalculationDate, interestPostTransactions,
                         isInterestTransfer, minBalanceForInterestCalculation, isSavingsInterestPostingAtCurrentPeriodEnd,
                         overdraftInterestRateAsFraction, minOverdraftForInterestCalculation, isUserPosting, financialYearBeginningMonth);
+                postingPeriod.setTieredRateResolver(getTieredInterestRateAsFractionResolver(mc, periodInterval.endDate()));
 
                 periodStartingBalance = postingPeriod.closingBalance();
 
@@ -814,12 +816,39 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
     }
 
     public BigDecimal getEffectiveInterestRateAsFractionAccrual(final MathContext mc, final LocalDate upToInterestCalculationDate) {
-        return this.nominalAnnualInterestRate.divide(BigDecimal.valueOf(100L), mc);
+        if (this.depositAccountType() == DepositAccountType.SAVINGS_DEPOSIT && this.chart != null
+                && this.chart.isPrimaryGroupingByAmount()) {
+            final BigDecimal currentBalance = this.summary != null && this.summary.getAccountBalance() != null
+                    ? this.summary.getAccountBalance()
+                    : BigDecimal.ZERO;
+            final Function<BigDecimal, BigDecimal> resolver = getTieredInterestRateAsFractionResolver(mc, upToInterestCalculationDate);
+            return resolver != null ? resolver.apply(currentBalance) : BigDecimal.ZERO;
+        }
+        return this.nominalAnnualInterestRate != null ? this.nominalAnnualInterestRate.divide(BigDecimal.valueOf(100L), mc)
+                : BigDecimal.ZERO;
     }
 
     @SuppressWarnings("unused")
     protected BigDecimal getEffectiveInterestRateAsFraction(final MathContext mc, final LocalDate upToInterestCalculationDate) {
-        return this.nominalAnnualInterestRate.divide(BigDecimal.valueOf(100L), mc);
+        return this.nominalAnnualInterestRate != null ? this.nominalAnnualInterestRate.divide(BigDecimal.valueOf(100L), mc)
+                : BigDecimal.ZERO;
+    }
+
+    protected Function<BigDecimal, BigDecimal> getTieredInterestRateAsFractionResolver(final MathContext mc,
+            final LocalDate upToInterestCalculationDate) {
+        if (this.depositAccountType() == DepositAccountType.SAVINGS_DEPOSIT && this.chart != null
+                && this.chart.isPrimaryGroupingByAmount()) {
+            final LocalDate periodStartDate = accountSubmittedOrActivationDate();
+            return balance -> {
+                if (balance == null || balance.compareTo(BigDecimal.ZERO) < 0) {
+                    return BigDecimal.ZERO;
+                }
+                final BigDecimal annualRate = this.chart.getApplicableInterestRate(balance, periodStartDate,
+                        upToInterestCalculationDate, this.client);
+                return annualRate != null ? annualRate.divide(BigDecimal.valueOf(100L), mc) : BigDecimal.ZERO;
+            };
+        }
+        return null;
     }
 
     private boolean hasInterestCalculation() {
