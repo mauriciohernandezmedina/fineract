@@ -48,7 +48,7 @@ Fineract 1.15 enforces strict Gradle module dependencies:
 
 ---
 
-## PHASE 3: Whole-Balance Tiered Calculation Engine (`PostingPeriod` & `EndOfDayBalance`)
+## PHASE 3: Whole-Balance Tiered Calculation Engine (`PostingPeriod` & `EndOfDayBalance`) (COMPLETED)
 
 ### Architectural Design (Respecting `fineract-core` <- `fineract-savings` Boundary)
 - `PostingPeriod`, `CompoundingPeriod` (`DailyCompoundingPeriod`, `MonthlyCompoundingPeriod`, `QuarterlyCompoundingPeriod`, `BiAnnualCompoundingPeriod`, `AnnualCompoundingPeriod`), and `EndOfDayBalance` live in **`fineract-core`** (`org.apache.fineract.portfolio.savings.domain.interest`).
@@ -93,4 +93,53 @@ Fineract 1.15 enforces strict Gradle module dependencies:
   1. **Whole-Balance Tiered Rate (Nivel Total)**: A balance of `$500` in Tier 1 (`0 - 1,000` @ `3%`) earns `3%` on the full `$500`; when a deposit brings the balance to `$2,500` in Tier 2 (`1,000.01 - 5,000` @ `5%`), it earns `5%` on the full `$2,500` for those days, and when a withdrawal brings it to `$800`, it reverts to `3%` on `$800`.
   2. **Multi-tier mid-period balance fluctuation**: A single `PostingPeriod` with multiple `EndOfDayBalance` entries across different tiers calculates the exact sum of daily tiered interests.
   3. **100% Backward Compatibility**: When `tieredRateResolver == null`, `PostingPeriod.calculateInterest(...)` produces the exact same result as the flat `interestRateAsFraction`.
+
+
+---
+
+## PHASE 4: Expose Embedded Charts in `GET /v1/savingsproducts/{id}` and `GET /v1/savingsaccounts/{id}` (Mifos Web App Compatibility)
+
+### Architectural Design (Respecting `fineract-core` <- `fineract-savings` <- `fineract-provider` Boundary)
+- Mifos Web App expects interest rate chart data (`charts`, `interestRateCharts`, `activeChart`, `chartTemplate` on products, and `accountChart`, `chartTemplate` on accounts) embedded directly in the JSON payload of `GET /v1/savingsproducts/{id}` (and `/template`) and `GET /v1/savingsaccounts/{id}` (and `/template`), matching the structure returned by `FixedDepositProductsApiResource` and `FixedDepositAccountsApiResource`.
+- `SavingsProductData` and `SavingsAccountData` reside in **`fineract-core`**, whereas `InterestRateChartData` and `DepositAccountInterestRateChartData` reside in **`fineract-savings`**.
+- **Strict Boundary Rule**: `SavingsProductData` and `SavingsAccountData` in `fineract-core` **MUST NOT** import `InterestRateChartData` or `DepositAccountInterestRateChartData` from `fineract-savings`. Instead, declare the fields in `fineract-core` as `Collection<?>` / `Object` (both Gson `DefaultToApiJsonSerializer` and Jackson serialize fields by their runtime type).
+- **Dual Serializer Support (Gson & Jackson)**:
+  - `SavingsProductsApiResource` and `SavingsAccountsApiResource.template` serialize using Gson (`DefaultToApiJsonSerializer`), whereas `SavingsAccountsApiResource.retrieveOne` returns `SavingsAccountData` directly and is serialized by Jackson.
+  - Therefore, `DepositAccountInterestRateChartData`, `DepositAccountInterestRateChartSlabData`, and `DepositAccountInterestIncentiveData` in `fineract-savings` must be annotated with Lombok `@Getter`, and `isPrimaryGroupingByAmount` on `InterestRateChartData` and `DepositAccountInterestRateChartData` must be annotated with `@JsonProperty("isPrimaryGroupingByAmount")` so both Jackson and Gson serialize identical JSON property names.
+
+### Target Files to Modify in Phase 4
+1. **`fineract-core/src/main/java/org/apache/fineract/portfolio/savings/data/SavingsProductData.java`**
+   - Add `@Setter` fields:
+     - `private Collection<?> charts;`
+     - `private Collection<?> interestRateCharts;`
+     - `private Object activeChart;`
+     - `private Object chartTemplate;`
+   - Preserve `charts`, `interestRateCharts`, `activeChart`, and `chartTemplate` in copy factory methods `withCharges(...)`, `withAccountingDetails(...)`, and `withTemplate(...)`.
+2. **`fineract-core/src/main/java/org/apache/fineract/portfolio/savings/data/SavingsAccountData.java`**
+   - Add fields (class already has `@Getter` and `@Setter`):
+     - `private Object accountChart;`
+     - `private Object chartTemplate;`
+   - Preserve `accountChart` and `chartTemplate` in `withTemplateOptions(...)`.
+3. **`fineract-savings/src/main/java/org/apache/fineract/portfolio/interestratechart/data/InterestRateChartData.java`**
+   - Annotate `private final boolean isPrimaryGroupingByAmount;` with `@JsonProperty("isPrimaryGroupingByAmount")`.
+4. **`fineract-savings/src/main/java/org/apache/fineract/portfolio/savings/data/DepositAccountInterestRateChartData.java`, `DepositAccountInterestRateChartSlabData.java`, and `DepositAccountInterestIncentiveData.java`**
+   - Add `@Getter` to all three classes.
+   - Annotate `private final boolean isPrimaryGroupingByAmount;` in `DepositAccountInterestRateChartData` with `@JsonProperty("isPrimaryGroupingByAmount")`.
+5. **`fineract-savings/src/main/java/org/apache/fineract/portfolio/savings/SavingsApiSetConstants.java`**
+   - Add `DepositsApiConstants.chartsParamName` (`"charts"`), `"interestRateCharts"`, `"activeChart"`, and `DepositsApiConstants.chartTemplateParamName` (`"chartTemplate"`) to `SAVINGS_PRODUCT_RESPONSE_DATA_PARAMETERS`.
+   - Add `DepositsApiConstants.accountChartParamName` (`"accountChart"`) and `DepositsApiConstants.chartTemplateParamName` (`"chartTemplate"`) to `SAVINGS_ACCOUNT_RESPONSE_DATA_PARAMETERS`.
+6. **`fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/api/SavingsProductsApiResource.java`**
+   - Inject `InterestRateChartReadService chartReadPlatformService`.
+   - In `retrieveOne(Long productId, UriInfo uriInfo)`: retrieve `Collection<InterestRateChartData> charts = this.chartReadPlatformService.retrieveAllWithSlabsWithTemplate(productId);` and populate `charts`, `interestRateCharts`, and `activeChart` (`DepositProductData.activeChart(charts)`).
+   - In `handleTemplateRelatedData(SavingsProductData savingsProduct)`: populate `chartTemplate` via `this.chartReadPlatformService.template()`.
+7. **`fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/api/SavingsAccountsApiResource.java`**
+   - Inject `InterestRateChartReadService productChartReadPlatformService` and `DepositAccountInterestRateChartReadPlatformService accountChartReadPlatformService`.
+   - In `template(Long clientId, Long groupId, Long productId, ...)`: when `productId != null`, resolve the product's active chart via `this.productChartReadPlatformService.retrieveActiveChartWithTemplate(productId)` and set `accountChart` via `DepositAccountInterestRateChartData.from(productChartData)`, plus `chartTemplate` via `this.accountChartReadPlatformService.template()`.
+   - In `populateTemplateAndAssociations(Long accountId, SavingsAccountData savingsAccount, ...)`: retrieve `accountChart` via `this.accountChartReadPlatformService.retrieveOneWithSlabsOnAccountId(accountId)` (catching `DepositAccountInterestRateChartNotFoundException` so standard accounts without a chart keep `accountChart = null`), enrich with template options if `settings.isTemplate()`, and set `accountChart` (and `chartTemplate` when `settings.isTemplate()`).
+
+### Phase 4 Verification
+- Create unit test `SavingsChartReadSerializationTest` in `fineract-provider/src/test/java/org/apache/fineract/portfolio/savings/api/` verifying:
+  1. `SavingsProductData` preserves `charts`, `interestRateCharts`, `activeChart`, and `chartTemplate` across `withCharges(...)`, `withAccountingDetails(...)`, and `withTemplate(...)`.
+  2. `SavingsAccountData` preserves `accountChart` and `chartTemplate` across `withTemplateOptions(...)`.
+  3. Both Jackson (`ObjectMapper`) and Gson (`GoogleGsonSerializerHelper`) serialize `charts`, `interestRateCharts`, `activeChart`, `accountChart`, `chartSlabs`, and `"isPrimaryGroupingByAmount":true` accurately.
 
