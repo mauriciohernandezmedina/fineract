@@ -213,4 +213,12 @@ public interface LoanApiConstants {
 
     String ORIGINATORS_PARAM = "originators";
 
+    // Loan Term Variations parameters for schedule calculation / simulation
+    String loanTermVariationsParameterName = "loanTermVariations";
+    String termTypeParameterName = "termType";
+    String applicableFromDateParameterName = "applicableFromDate";
+    String decimalValueParameterName = "decimalValue";
+    String dateValueParameterName = "dateValue";
+    String isSpecificToInstallmentParameterName = "isSpecificToInstallment";
+
 }

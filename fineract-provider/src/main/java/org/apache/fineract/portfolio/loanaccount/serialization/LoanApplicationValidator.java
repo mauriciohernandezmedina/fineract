@@ -99,6 +99,7 @@ import org.apache.fineract.portfolio.loanaccount.domain.LoanLifecycleStateMachin
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepaymentScheduleTransactionProcessorFactory;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanStatus;
+import org.apache.fineract.portfolio.loanaccount.domain.LoanTermVariationType;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanTransactionType;
 import org.apache.fineract.portfolio.loanaccount.domain.transactionprocessor.impl.AdvancedPaymentScheduleTransactionProcessor;
 import org.apache.fineract.portfolio.loanaccount.exception.ExceedingTrancheCountException;
@@ -176,7 +177,13 @@ public final class LoanApplicationValidator {
             LoanProductConstants.ENABLE_INSTALLMENT_LEVEL_DELINQUENCY, LoanProductConstants.ENABLE_DOWN_PAYMENT,
             LoanProductConstants.ENABLE_AUTO_REPAYMENT_DOWN_PAYMENT, LoanProductConstants.DISBURSED_AMOUNT_PERCENTAGE_DOWN_PAYMENT,
             LoanApiConstants.INTEREST_RECOGNITION_ON_DISBURSEMENT_DATE, LoanApiConstants.daysInYearCustomStrategyParameterName,
-            LoanApiConstants.ALLOW_FULL_TERM_FOR_TRANCHE, LoanApiConstants.ORIGINATORS_PARAM, LoanApiConstants.REPAYMENT_START_DATE_TYPE));
+            LoanApiConstants.ALLOW_FULL_TERM_FOR_TRANCHE, LoanApiConstants.ORIGINATORS_PARAM, LoanApiConstants.REPAYMENT_START_DATE_TYPE,
+            LoanApiConstants.loanTermVariationsParameterName));
+    private static final Set<String> LOAN_TERM_VARIATION_SUPPORTED_PARAMETERS = new HashSet<>(
+            Arrays.asList(LoanApiConstants.termTypeParameterName, LoanApiConstants.applicableFromDateParameterName,
+                    LoanApiConstants.decimalValueParameterName, LoanApiConstants.dateValueParameterName,
+                    LoanApiConstants.isSpecificToInstallmentParameterName, LoanApiConstants.localeParameterName,
+                    LoanApiConstants.dateFormatParameterName));
     public static final String LOANAPPLICATION_UNDO = "loanapplication.undo";
 
     private final FromJsonHelper fromApiJsonHelper;
@@ -797,6 +804,8 @@ public final class LoanApplicationValidator {
                 baseDataValidator.reset().parameter(LoanApiConstants.REPAYMENT_START_DATE_TYPE).value(repaymentStartDateType).notNull()
                         .isOneOfTheseValues(1, 2);
             }
+
+            validateLoanTermVariations(element, baseDataValidator);
         });
 
         validateSubmittedOnDate(element, null, null, loanProduct);
@@ -2275,6 +2284,125 @@ public final class LoanApplicationValidator {
             firstDisbursalAmount = loan.getLoanRepaymentScheduleDetail().getPrincipal().getAmount();
         }
         return firstDisbursalAmount;
+    }
+
+    public void validateLoanTermVariations(final JsonElement element, final DataValidatorBuilder baseDataValidator) {
+        if (!element.isJsonObject() || !this.fromApiJsonHelper.parameterExists(LoanApiConstants.loanTermVariationsParameterName, element)) {
+            return;
+        }
+        final JsonObject rootObject = element.getAsJsonObject();
+        final JsonElement variationsElement = rootObject.get(LoanApiConstants.loanTermVariationsParameterName);
+        if (variationsElement == null || variationsElement.isJsonNull()) {
+            return;
+        }
+        if (!variationsElement.isJsonArray()) {
+            baseDataValidator.reset().parameter(LoanApiConstants.loanTermVariationsParameterName).failWithCode("must.be.json.array",
+                    "Parameter loanTermVariations must be a JSON array.");
+            return;
+        }
+
+        final Locale rootLocale = this.fromApiJsonHelper.extractLocaleParameter(rootObject);
+        final String rootDateFormat = this.fromApiJsonHelper.extractDateFormatParameter(rootObject);
+        final JsonArray variationsArray = variationsElement.getAsJsonArray();
+
+        for (int i = 0; i < variationsArray.size(); i++) {
+            final JsonElement itemElement = variationsArray.get(i);
+            if (itemElement == null || !itemElement.isJsonObject()) {
+                baseDataValidator.reset().parameterAtIndexArray(LoanApiConstants.loanTermVariationsParameterName, i + 1)
+                        .failWithCode("must.be.json.object", "Each loanTermVariations entry must be a JSON object.");
+                continue;
+            }
+            final JsonObject variationObject = itemElement.getAsJsonObject();
+            this.fromApiJsonHelper.checkForUnsupportedNestedParameters(LoanApiConstants.loanTermVariationsParameterName, variationObject,
+                    LOAN_TERM_VARIATION_SUPPORTED_PARAMETERS);
+
+            final Locale itemLocale = variationObject.has(LoanApiConstants.localeParameterName)
+                    ? this.fromApiJsonHelper.extractLocaleParameter(variationObject)
+                    : (rootLocale != null ? rootLocale : Locale.getDefault());
+            final String itemDateFormat = variationObject.has(LoanApiConstants.dateFormatParameterName)
+                    ? this.fromApiJsonHelper.extractDateFormatParameter(variationObject)
+                    : rootDateFormat;
+
+            final LoanTermVariationType variationType = resolveLoanTermVariationType(variationObject, itemLocale);
+            final Integer variationTypeId = variationType == LoanTermVariationType.INVALID ? null : variationType.getValue();
+            baseDataValidator.reset().parameterAtIndexArray(LoanApiConstants.termTypeParameterName, i + 1).value(variationTypeId).notNull()
+                    .inMinMaxRange(LoanTermVariationType.EMI_AMOUNT.getValue(), LoanTermVariationType.INTEREST_PAUSE.getValue());
+
+            final LocalDate applicableFromDate = this.fromApiJsonHelper
+                    .extractLocalDateNamed(LoanApiConstants.applicableFromDateParameterName, variationObject, itemDateFormat, itemLocale);
+            baseDataValidator.reset().parameterAtIndexArray(LoanApiConstants.applicableFromDateParameterName, i + 1)
+                    .value(applicableFromDate).notNull();
+
+            final BigDecimal decimalValue = this.fromApiJsonHelper.extractBigDecimalNamed(LoanApiConstants.decimalValueParameterName,
+                    variationObject, itemLocale);
+            final LocalDate dateValue = this.fromApiJsonHelper.extractLocalDateNamed(LoanApiConstants.dateValueParameterName,
+                    variationObject, itemDateFormat, itemLocale);
+
+            if (variationType != LoanTermVariationType.INVALID) {
+                switch (variationType) {
+                    case EMI_AMOUNT:
+                    case PRINCIPAL_AMOUNT:
+                    case INSERT_INSTALLMENT:
+                        baseDataValidator.reset().parameterAtIndexArray(LoanApiConstants.decimalValueParameterName, i + 1)
+                                .value(decimalValue).notNull().zeroOrPositiveAmount();
+                    break;
+                    case INTEREST_RATE:
+                    case INTEREST_RATE_FROM_INSTALLMENT:
+                        baseDataValidator.reset().parameterAtIndexArray(LoanApiConstants.decimalValueParameterName, i + 1)
+                                .value(decimalValue).notNull().zeroOrPositiveAmount();
+                    break;
+                    case GRACE_ON_INTEREST:
+                    case GRACE_ON_PRINCIPAL:
+                    case EXTEND_REPAYMENT_PERIOD:
+                        baseDataValidator.reset().parameterAtIndexArray(LoanApiConstants.decimalValueParameterName, i + 1)
+                                .value(decimalValue).notNull().positiveAmount();
+                    break;
+                    case DUE_DATE:
+                    case INTEREST_PAUSE:
+                        baseDataValidator.reset().parameterAtIndexArray(LoanApiConstants.dateValueParameterName, i + 1).value(dateValue)
+                                .notNull();
+                    break;
+                    case DELETE_INSTALLMENT:
+                    default:
+                    break;
+                }
+            }
+
+            if (this.fromApiJsonHelper.parameterExists(LoanApiConstants.isSpecificToInstallmentParameterName, variationObject)) {
+                this.fromApiJsonHelper.extractBooleanNamed(LoanApiConstants.isSpecificToInstallmentParameterName, variationObject);
+            }
+        }
+    }
+
+    private LoanTermVariationType resolveLoanTermVariationType(final JsonObject variationObject, final Locale locale) {
+        if (!variationObject.has(LoanApiConstants.termTypeParameterName)
+                || variationObject.get(LoanApiConstants.termTypeParameterName).isJsonNull()) {
+            return LoanTermVariationType.INVALID;
+        }
+        final JsonElement termTypeElement = variationObject.get(LoanApiConstants.termTypeParameterName);
+        if (!termTypeElement.isJsonPrimitive()) {
+            return LoanTermVariationType.INVALID;
+        }
+        final String rawValue = termTypeElement.getAsString().trim();
+        if (StringUtils.isBlank(rawValue)) {
+            return LoanTermVariationType.INVALID;
+        }
+        if (StringUtils.isNumeric(rawValue)) {
+            final Integer intVal = this.fromApiJsonHelper.extractIntegerNamed(LoanApiConstants.termTypeParameterName, variationObject,
+                    locale);
+            return intVal != null ? LoanTermVariationType.fromInt(intVal) : LoanTermVariationType.INVALID;
+        }
+        for (final LoanTermVariationType candidate : LoanTermVariationType.values()) {
+            if (candidate == LoanTermVariationType.INVALID) {
+                continue;
+            }
+            final String shortCode = candidate.getCode().replace("loanTermType.", "");
+            if (candidate.name().equalsIgnoreCase(rawValue) || candidate.getCode().equalsIgnoreCase(rawValue)
+                    || shortCode.equalsIgnoreCase(rawValue)) {
+                return candidate;
+            }
+        }
+        return LoanTermVariationType.INVALID;
     }
 
 }

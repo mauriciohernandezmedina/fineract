@@ -472,6 +472,7 @@ public class LoanScheduleAssembler {
                 loanTermVariations.add(loanTermVariation);
             }
         }
+        extractLoanTermVariationsFromJson(element, loanTermVariations);
 
         final Long clientId = this.fromApiJsonHelper.extractLongNamed("clientId", element);
         Client client = null;
@@ -1608,6 +1609,83 @@ public class LoanScheduleAssembler {
             loanApplicationTerms
                     .updateTotalInterestDue(Money.of(loanApplicationTerms.getCurrency(), loanSchedule.getTotalInterestCharged()));
         }
+    }
+
+    public void extractLoanTermVariationsFromJson(final JsonElement element, final List<LoanTermVariationsData> loanTermVariations) {
+        if (element == null || !element.isJsonObject()
+                || !this.fromApiJsonHelper.parameterExists(LoanApiConstants.loanTermVariationsParameterName, element)) {
+            return;
+        }
+        final JsonObject rootObject = element.getAsJsonObject();
+        final JsonArray variationsArray = this.fromApiJsonHelper.extractJsonArrayNamed(LoanApiConstants.loanTermVariationsParameterName,
+                rootObject);
+        if (variationsArray == null || variationsArray.isEmpty()) {
+            return;
+        }
+
+        final Locale rootLocale = this.fromApiJsonHelper.extractLocaleParameter(rootObject);
+        final String rootDateFormat = this.fromApiJsonHelper.extractDateFormatParameter(rootObject);
+
+        for (int i = 0; i < variationsArray.size(); i++) {
+            final JsonElement itemElement = variationsArray.get(i);
+            if (itemElement == null || !itemElement.isJsonObject()) {
+                continue;
+            }
+            final JsonObject variationObject = itemElement.getAsJsonObject();
+            final Locale itemLocale = variationObject.has(LoanApiConstants.localeParameterName)
+                    ? this.fromApiJsonHelper.extractLocaleParameter(variationObject)
+                    : (rootLocale != null ? rootLocale : Locale.getDefault());
+            final String itemDateFormat = variationObject.has(LoanApiConstants.dateFormatParameterName)
+                    ? this.fromApiJsonHelper.extractDateFormatParameter(variationObject)
+                    : rootDateFormat;
+
+            final LoanTermVariationType variationType = resolveVariationType(variationObject, itemLocale);
+            if (variationType == LoanTermVariationType.INVALID) {
+                continue;
+            }
+            final LocalDate applicableFromDate = this.fromApiJsonHelper
+                    .extractLocalDateNamed(LoanApiConstants.applicableFromDateParameterName, variationObject, itemDateFormat, itemLocale);
+            final BigDecimal decimalValue = this.fromApiJsonHelper.extractBigDecimalNamed(LoanApiConstants.decimalValueParameterName,
+                    variationObject, itemLocale);
+            final LocalDate dateValue = this.fromApiJsonHelper.extractLocalDateNamed(LoanApiConstants.dateValueParameterName,
+                    variationObject, itemDateFormat, itemLocale);
+            final boolean isSpecificToInstallment = Boolean.TRUE.equals(
+                    this.fromApiJsonHelper.extractBooleanNamed(LoanApiConstants.isSpecificToInstallmentParameterName, variationObject));
+
+            loanTermVariations.add(new LoanTermVariationsData(LoanEnumerations.loanVariationType(variationType), applicableFromDate,
+                    decimalValue, dateValue, isSpecificToInstallment));
+        }
+    }
+
+    private LoanTermVariationType resolveVariationType(final JsonObject variationObject, final Locale locale) {
+        if (!variationObject.has(LoanApiConstants.termTypeParameterName)
+                || variationObject.get(LoanApiConstants.termTypeParameterName).isJsonNull()) {
+            return LoanTermVariationType.INVALID;
+        }
+        final JsonElement termTypeElement = variationObject.get(LoanApiConstants.termTypeParameterName);
+        if (!termTypeElement.isJsonPrimitive()) {
+            return LoanTermVariationType.INVALID;
+        }
+        final String rawValue = termTypeElement.getAsString().trim();
+        if (StringUtils.isBlank(rawValue)) {
+            return LoanTermVariationType.INVALID;
+        }
+        if (StringUtils.isNumeric(rawValue)) {
+            final Integer intVal = this.fromApiJsonHelper.extractIntegerNamed(LoanApiConstants.termTypeParameterName, variationObject,
+                    locale);
+            return intVal != null ? LoanTermVariationType.fromInt(intVal) : LoanTermVariationType.INVALID;
+        }
+        for (final LoanTermVariationType candidate : LoanTermVariationType.values()) {
+            if (candidate == LoanTermVariationType.INVALID) {
+                continue;
+            }
+            final String shortCode = candidate.getCode().replace("loanTermType.", "");
+            if (candidate.name().equalsIgnoreCase(rawValue) || candidate.getCode().equalsIgnoreCase(rawValue)
+                    || shortCode.equalsIgnoreCase(rawValue)) {
+                return candidate;
+            }
+        }
+        return LoanTermVariationType.INVALID;
     }
 
 }
