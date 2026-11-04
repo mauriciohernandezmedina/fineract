@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.TreeSet;
+import java.util.function.Function;
 import lombok.Getter;
 import lombok.Setter;
 import org.apache.fineract.infrastructure.core.domain.LocalDateInterval;
@@ -60,6 +61,7 @@ public final class PostingPeriod {
     // include in compounding interest
     private boolean interestTransfered = false;
     private boolean isUserPosting = false;
+    private Function<BigDecimal, BigDecimal> tieredRateResolver;
 
     // minimum balance for interest calculation
     private final Money minBalanceForInterestCalculation;
@@ -295,7 +297,7 @@ public final class PostingPeriod {
             final BigDecimal interestUnrounded = compoundingPeriod.calculateInterest(this.interestCompoundingType,
                     this.interestCalculationType, compoundInterestValues.getcompoundedInterest(), this.interestRateAsFraction,
                     this.daysInYear, this.minBalanceForInterestCalculation.getAmount(), this.overdraftInterestRateAsFraction,
-                    this.minOverdraftForInterestCalculation.getAmount());
+                    this.minOverdraftForInterestCalculation.getAmount(), this.tieredRateResolver);
             BigDecimal unCompoundedInterest = compoundInterestValues.getuncompoundedInterest().add(interestUnrounded);
             compoundInterestValues.setuncompoundedInterest(unCompoundedInterest);
             LocalDate compoundingPeriodEndDate = compoundingPeriod.getPeriodInterval().endDate();

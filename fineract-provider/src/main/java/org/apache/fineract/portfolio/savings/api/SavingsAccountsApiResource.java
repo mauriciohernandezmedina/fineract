@@ -65,12 +65,17 @@ import org.apache.fineract.infrastructure.core.service.Page;
 import org.apache.fineract.infrastructure.core.service.SearchParameters;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.infrastructure.security.service.SqlValidator;
+import org.apache.fineract.portfolio.interestratechart.data.InterestRateChartData;
+import org.apache.fineract.portfolio.interestratechart.service.InterestRateChartReadService;
 import org.apache.fineract.portfolio.savings.DepositAccountType;
 import org.apache.fineract.portfolio.savings.SavingsApiConstants;
+import org.apache.fineract.portfolio.savings.data.DepositAccountInterestRateChartData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountChargeData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionData;
+import org.apache.fineract.portfolio.savings.exception.DepositAccountInterestRateChartNotFoundException;
 import org.apache.fineract.portfolio.savings.exception.SavingsAccountNotFoundException;
+import org.apache.fineract.portfolio.savings.service.DepositAccountInterestRateChartReadPlatformService;
 import org.apache.fineract.portfolio.savings.service.SavingsAccountChargeReadPlatformService;
 import org.apache.fineract.portfolio.savings.service.SavingsAccountReadPlatformService;
 import org.apache.fineract.portfolio.savings.service.SavingsAccountTemplateReadPlatformService;
@@ -95,6 +100,8 @@ public class SavingsAccountsApiResource {
     private final BulkImportWorkbookService bulkImportWorkbookService;
     private final BulkImportWorkbookPopulatorService bulkImportWorkbookPopulatorService;
     private final SqlValidator sqlValidator;
+    private final DepositAccountInterestRateChartReadPlatformService accountChartReadPlatformService;
+    private final InterestRateChartReadService productChartReadPlatformService;
 
     @GET
     @Path("template")
@@ -114,6 +121,13 @@ public class SavingsAccountsApiResource {
 
         final SavingsAccountData savingsAccount = savingsAccountTemplateReadPlatformService.retrieveTemplate(clientId, groupId, productId,
                 staffInSelectedOfficeOnly);
+        if (productId != null) {
+            final InterestRateChartData productChart = productChartReadPlatformService.retrieveActiveChartWithTemplate(productId);
+            if (productChart != null) {
+                savingsAccount.setAccountChart(DepositAccountInterestRateChartData.from(productChart));
+            }
+        }
+        savingsAccount.setChartTemplate(accountChartReadPlatformService.template());
 
         final ApiRequestJsonSerializationSettings settings = apiRequestParameterHelper.process(uriInfo.getQueryParameters());
         return toApiJsonSerializer.serialize(settings, savingsAccount, SavingsApiSetConstants.SAVINGS_ACCOUNT_RESPONSE_DATA_PARAMETERS);
@@ -639,11 +653,20 @@ public class SavingsAccountsApiResource {
             }
         }
 
+        try {
+            final DepositAccountInterestRateChartData accountChart = accountChartReadPlatformService
+                    .retrieveOneWithSlabsOnAccountId(accountId);
+            savingsAccount.setAccountChart(accountChart);
+        } catch (final DepositAccountInterestRateChartNotFoundException ignored) {
+            // Account has no tiered interest rate chart (flat-rate savings account)
+        }
+
         SavingsAccountData templateData = null;
         final ApiRequestJsonSerializationSettings settings = apiRequestParameterHelper.process(uriInfo.getQueryParameters());
         if (settings.isTemplate()) {
             templateData = savingsAccountTemplateReadPlatformService.retrieveTemplate(savingsAccount.getClientId(),
                     savingsAccount.getGroupId(), savingsAccount.getSavingsProductId(), staffInSelectedOfficeOnly);
+            savingsAccount.setChartTemplate(accountChartReadPlatformService.template());
         }
 
         return SavingsAccountData.withTemplateOptions(savingsAccount, templateData, transactions, charges);

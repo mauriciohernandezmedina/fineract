@@ -101,6 +101,8 @@ public final class SavingsAccountData implements Serializable {
     private final Collection<SavingsAccountTransactionData> transactions;
 
     private final Collection<SavingsAccountChargeData> charges;
+    private Object accountChart;
+    private Object chartTemplate;
 
     // template
     private final Collection<SavingsProductData> productOptions;
@@ -705,21 +707,25 @@ public final class SavingsAccountData implements Serializable {
                     lockinPeriodFrequencyTypeOptions, withdrawalFeeTypeOptions, transactions, charges, chargeOptions);
         }
 
-        return new SavingsAccountData(account.id, account.accountNo, account.depositType, account.externalId, account.groupId,
-                account.groupName, account.clientId, account.clientName, account.savingsProductId, account.savingsProductName,
-                account.fieldOfficerId, account.fieldOfficerName, account.status, account.subStatus, account.reasonForBlock,
-                account.timeline, account.currency, account.nominalAnnualInterestRate, account.interestCompoundingPeriodType,
-                account.interestPostingPeriodType, account.interestCalculationType, account.interestCalculationDaysInYearType,
-                account.minRequiredOpeningBalance, account.lockinPeriodFrequency, account.lockinPeriodFrequencyType,
-                account.withdrawalFeeForTransfers, account.summary, transactions, template.productOptions, template.fieldOfficerOptions,
-                template.interestCompoundingPeriodTypeOptions, template.interestPostingPeriodTypeOptions,
-                template.interestCalculationTypeOptions, template.interestCalculationDaysInYearTypeOptions,
-                template.lockinPeriodFrequencyTypeOptions, template.withdrawalFeeTypeOptions, charges, template.chargeOptions,
-                account.allowOverdraft, account.overdraftLimit, account.minRequiredBalance, account.enforceMinRequiredBalance,
-                account.maxAllowedLienLimit, account.lienAllowed, account.minBalanceForInterestCalculation, account.onHoldFunds,
-                account.nominalAnnualInterestRateOverdraft, account.minOverdraftForInterestCalculation, account.withHoldTax,
-                account.taxGroup, account.lastActiveTransactionDate, account.isDormancyTrackingActive, account.daysToInactive,
-                account.daysToDormancy, account.daysToEscheat, account.savingsAmountOnHold);
+        final SavingsAccountData result = new SavingsAccountData(account.id, account.accountNo, account.depositType, account.externalId,
+                account.groupId, account.groupName, account.clientId, account.clientName, account.savingsProductId,
+                account.savingsProductName, account.fieldOfficerId, account.fieldOfficerName, account.status, account.subStatus,
+                account.reasonForBlock, account.timeline, account.currency, account.nominalAnnualInterestRate,
+                account.interestCompoundingPeriodType, account.interestPostingPeriodType, account.interestCalculationType,
+                account.interestCalculationDaysInYearType, account.minRequiredOpeningBalance, account.lockinPeriodFrequency,
+                account.lockinPeriodFrequencyType, account.withdrawalFeeForTransfers, account.summary, transactions,
+                template.productOptions, template.fieldOfficerOptions, template.interestCompoundingPeriodTypeOptions,
+                template.interestPostingPeriodTypeOptions, template.interestCalculationTypeOptions,
+                template.interestCalculationDaysInYearTypeOptions, template.lockinPeriodFrequencyTypeOptions,
+                template.withdrawalFeeTypeOptions, charges, template.chargeOptions, account.allowOverdraft, account.overdraftLimit,
+                account.minRequiredBalance, account.enforceMinRequiredBalance, account.maxAllowedLienLimit, account.lienAllowed,
+                account.minBalanceForInterestCalculation, account.onHoldFunds, account.nominalAnnualInterestRateOverdraft,
+                account.minOverdraftForInterestCalculation, account.withHoldTax, account.taxGroup, account.lastActiveTransactionDate,
+                account.isDormancyTrackingActive, account.daysToInactive, account.daysToDormancy, account.daysToEscheat,
+                account.savingsAmountOnHold);
+        result.setAccountChart(account.accountChart != null ? account.accountChart : template.accountChart);
+        result.setChartTemplate(account.chartTemplate != null ? account.chartTemplate : template.chartTemplate);
+        return result;
     }
 
     public static SavingsAccountData withTemplateOptions(final SavingsAccountData account,
@@ -732,14 +738,14 @@ public final class SavingsAccountData implements Serializable {
             final Collection<SavingsAccountTransactionData> transactions, final Collection<SavingsAccountChargeData> charges,
             final Collection<ChargeData> chargeOptions) {
 
-        return new SavingsAccountData(account.id, account.accountNo, account.depositType, account.externalId, account.groupId,
-                account.groupName, account.clientId, account.clientName, account.savingsProductId, account.savingsProductName,
-                account.fieldOfficerId, account.fieldOfficerName, account.status, account.subStatus, account.reasonForBlock,
-                account.timeline, account.currency, account.nominalAnnualInterestRate, account.interestCompoundingPeriodType,
-                account.interestPostingPeriodType, account.interestCalculationType, account.interestCalculationDaysInYearType,
-                account.minRequiredOpeningBalance, account.lockinPeriodFrequency, account.lockinPeriodFrequencyType,
-                account.withdrawalFeeForTransfers, account.summary, transactions, productOptions, fieldOfficerOptions,
-                interestCompoundingPeriodTypeOptions, interestPostingPeriodTypeOptions, interestCalculationTypeOptions,
+        final SavingsAccountData result = new SavingsAccountData(account.id, account.accountNo, account.depositType, account.externalId,
+                account.groupId, account.groupName, account.clientId, account.clientName, account.savingsProductId,
+                account.savingsProductName, account.fieldOfficerId, account.fieldOfficerName, account.status, account.subStatus,
+                account.reasonForBlock, account.timeline, account.currency, account.nominalAnnualInterestRate,
+                account.interestCompoundingPeriodType, account.interestPostingPeriodType, account.interestCalculationType,
+                account.interestCalculationDaysInYearType, account.minRequiredOpeningBalance, account.lockinPeriodFrequency,
+                account.lockinPeriodFrequencyType, account.withdrawalFeeForTransfers, account.summary, transactions, productOptions,
+                fieldOfficerOptions, interestCompoundingPeriodTypeOptions, interestPostingPeriodTypeOptions, interestCalculationTypeOptions,
                 interestCalculationDaysInYearTypeOptions, lockinPeriodFrequencyTypeOptions, withdrawalFeeTypeOptions, charges,
                 chargeOptions, account.allowOverdraft, account.overdraftLimit, account.minRequiredBalance,
                 account.enforceMinRequiredBalance, account.maxAllowedLienLimit, account.lienAllowed,
@@ -747,6 +753,9 @@ public final class SavingsAccountData implements Serializable {
                 account.minOverdraftForInterestCalculation, account.withHoldTax, account.taxGroup, account.lastActiveTransactionDate,
                 account.isDormancyTrackingActive, account.daysToInactive, account.daysToDormancy, account.daysToEscheat,
                 account.savingsAmountOnHold);
+        result.setAccountChart(account.accountChart);
+        result.setChartTemplate(account.chartTemplate);
+        return result;
     }
 
     public static SavingsAccountData withClientTemplate(final Long clientId, final String clientName, final Long groupId,

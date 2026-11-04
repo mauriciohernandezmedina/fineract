@@ -94,7 +94,7 @@ public class SavingsProductDataValidator {
             interestCalculationTypeParamName, interestCalculationDaysInYearTypeParamName, minRequiredOpeningBalanceParamName,
             lockinPeriodFrequencyParamName, lockinPeriodFrequencyTypeParamName, SavingsApiConstants.withdrawalFeeAmountParamName,
             SavingsApiConstants.withdrawalFeeTypeParamName, withdrawalFeeForTransfersParamName, feeAmountParamName, feeOnMonthDayParamName,
-            SavingsApiConstants.accountingRuleParamName, SavingsApiConstants.chargesParamName,
+            SavingsApiConstants.accountingRuleParamName, SavingsApiConstants.chargesParamName, SavingsApiConstants.chartsParamName,
             SavingProductAccountingParams.INCOME_FROM_FEES.getValue(), SavingProductAccountingParams.INCOME_FROM_PENALTIES.getValue(),
             SavingProductAccountingParams.INTEREST_ON_SAVINGS.getValue(), SavingProductAccountingParams.PENALTIES_RECEIVABLE.getValue(),
             SavingProductAccountingParams.PAYMENT_CHANNEL_FUND_SOURCE_MAPPING.getValue(),

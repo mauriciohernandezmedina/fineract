@@ -21,8 +21,12 @@ package org.apache.fineract.portfolio.savings.service;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.SAVINGS_PRODUCT_RESOURCE_NAME;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.accountingRuleParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.chargesParamName;
+import static org.apache.fineract.portfolio.savings.SavingsApiConstants.chartsParamName;
 import static org.apache.fineract.portfolio.savings.SavingsApiConstants.taxGroupIdParamName;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import jakarta.persistence.PersistenceException;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,10 +43,13 @@ import org.apache.fineract.infrastructure.core.data.CommandProcessingResultBuild
 import org.apache.fineract.infrastructure.core.data.DataValidatorBuilder;
 import org.apache.fineract.infrastructure.core.exception.ErrorHandler;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
+import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.infrastructure.entityaccess.domain.FineractEntityAccessType;
 import org.apache.fineract.infrastructure.entityaccess.service.FineractEntityAccessUtil;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.portfolio.charge.domain.Charge;
+import org.apache.fineract.portfolio.interestratechart.data.InterestRateChartDataValidator;
+import org.apache.fineract.portfolio.interestratechart.service.InterestRateChartAssembler;
 import org.apache.fineract.portfolio.savings.DepositAccountType;
 import org.apache.fineract.portfolio.savings.SavingsApiConstants;
 import org.apache.fineract.portfolio.savings.data.SavingsProductDataValidator;
@@ -64,6 +71,26 @@ public class SavingsProductWritePlatformServiceJpaRepositoryImpl implements Savi
     private final SavingsProductAssembler savingsProductAssembler;
     private final ProductToGLAccountMappingWritePlatformService accountMappingWritePlatformService;
     private final FineractEntityAccessUtil fineractEntityAccessUtil;
+    private final InterestRateChartDataValidator chartDataValidator;
+    private final InterestRateChartAssembler chartAssembler;
+    private final FromJsonHelper fromApiJsonHelper;
+
+    private void validateChartsData(final JsonCommand command) {
+        final JsonElement element = this.fromApiJsonHelper.parse(command.json());
+        if (this.fromApiJsonHelper.parameterExists(chartsParamName, element)) {
+            final JsonArray chartsArray = this.fromApiJsonHelper.extractJsonArrayNamed(chartsParamName, element);
+            if (chartsArray != null) {
+                for (int i = 0; i < chartsArray.size(); i++) {
+                    final JsonObject interestRateChartElement = chartsArray.get(i).getAsJsonObject();
+                    if (this.fromApiJsonHelper.parameterExists(SavingsApiConstants.idParamName, interestRateChartElement)) {
+                        this.chartDataValidator.validateUpdate(interestRateChartElement.toString());
+                    } else {
+                        this.chartDataValidator.validateForCreate(interestRateChartElement.toString());
+                    }
+                }
+            }
+        }
+    }
 
     /*
      * Guaranteed to throw an exception no matter what the data integrity issue is.
@@ -100,6 +127,7 @@ public class SavingsProductWritePlatformServiceJpaRepositoryImpl implements Savi
 
         try {
             this.fromApiJsonDataValidator.validateForCreate(command.json());
+            validateChartsData(command);
 
             final SavingsProduct product = this.savingsProductAssembler.assemble(command);
 
@@ -137,7 +165,9 @@ public class SavingsProductWritePlatformServiceJpaRepositoryImpl implements Savi
                     .orElseThrow(() -> new SavingsProductNotFoundException(productId));
 
             this.fromApiJsonDataValidator.validateForUpdate(command.json(), product);
+            validateChartsData(command);
 
+            product.setHelpers(this.chartAssembler);
             final Map<String, Object> changes = product.update(command);
 
             if (changes.containsKey(chargesParamName)) {

@@ -23,6 +23,7 @@ import java.math.MathContext;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 import org.apache.fineract.infrastructure.core.domain.LocalDateInterval;
 import org.apache.fineract.portfolio.savings.SavingsCompoundingInterestPeriodType;
 import org.apache.fineract.portfolio.savings.SavingsInterestCalculationType;
@@ -78,15 +79,28 @@ public final class DailyCompoundingPeriod implements CompoundingPeriod {
             final SavingsInterestCalculationType interestCalculationType, final BigDecimal interestFromPreviousPostingPeriod,
             final BigDecimal interestRateAsFraction, final long daysInYear, final BigDecimal minBalanceForInterestCalculation,
             final BigDecimal overdraftInterestRateAsFraction, final BigDecimal minOverdraftForInterestCalculation) {
+        return calculateInterest(compoundingInterestPeriodType, interestCalculationType, interestFromPreviousPostingPeriod,
+                interestRateAsFraction, daysInYear, minBalanceForInterestCalculation, overdraftInterestRateAsFraction,
+                minOverdraftForInterestCalculation, null);
+    }
+
+    @Override
+    public BigDecimal calculateInterest(final SavingsCompoundingInterestPeriodType compoundingInterestPeriodType,
+            final SavingsInterestCalculationType interestCalculationType, final BigDecimal interestFromPreviousPostingPeriod,
+            final BigDecimal interestRateAsFraction, final long daysInYear, final BigDecimal minBalanceForInterestCalculation,
+            final BigDecimal overdraftInterestRateAsFraction, final BigDecimal minOverdraftForInterestCalculation,
+            final Function<BigDecimal, BigDecimal> tieredRateResolver) {
         BigDecimal interestEarned = BigDecimal.ZERO;
 
         // for daily compounding - each interest calculated from previous daily
         // calculations is 'compounded'
         BigDecimal interestToCompound = interestFromPreviousPostingPeriod;
         for (final EndOfDayBalance balance : this.endOfDayBalances) {
-            final BigDecimal interestOnBalanceUnrounded = balance.calculateInterestOnBalanceAndInterest(interestToCompound,
-                    interestRateAsFraction, daysInYear, minBalanceForInterestCalculation, overdraftInterestRateAsFraction,
-                    minOverdraftForInterestCalculation);
+            final BigDecimal effectiveRate = tieredRateResolver != null
+                    ? tieredRateResolver.apply(balance.closingBalance().getAmount().add(interestToCompound))
+                    : interestRateAsFraction;
+            final BigDecimal interestOnBalanceUnrounded = balance.calculateInterestOnBalanceAndInterest(interestToCompound, effectiveRate,
+                    daysInYear, minBalanceForInterestCalculation, overdraftInterestRateAsFraction, minOverdraftForInterestCalculation);
             interestToCompound = interestToCompound.add(interestOnBalanceUnrounded, MathContext.DECIMAL64).setScale(9);
             interestEarned = interestEarned.add(interestOnBalanceUnrounded);
         }

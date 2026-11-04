@@ -42,6 +42,7 @@ public final class InterestRateChartData {
     private final Long productId;
     @JsonProperty("savingsProductName")
     private final String productName;
+    @JsonProperty("isPrimaryGroupingByAmount")
     private final boolean isPrimaryGroupingByAmount;
 
     // associations
@@ -200,6 +201,7 @@ public final class InterestRateChartData {
         return this.clientClassificationOptions;
     }
 
+    @JsonProperty("isPrimaryGroupingByAmount")
     public boolean isPrimaryGroupingByAmount() {
         return this.isPrimaryGroupingByAmount;
     }
