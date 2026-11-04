@@ -69,6 +69,8 @@ import org.apache.fineract.portfolio.group.domain.GroupRepositoryWrapper;
 import org.apache.fineract.portfolio.group.exception.CenterNotActiveException;
 import org.apache.fineract.portfolio.group.exception.ClientNotInGroupException;
 import org.apache.fineract.portfolio.group.exception.GroupNotActiveException;
+import org.apache.fineract.portfolio.interestratechart.domain.InterestRateChart;
+import org.apache.fineract.portfolio.savings.DepositsApiConstants;
 import org.apache.fineract.portfolio.savings.SavingsCompoundingInterestPeriodType;
 import org.apache.fineract.portfolio.savings.SavingsInterestCalculationDaysInYearType;
 import org.apache.fineract.portfolio.savings.SavingsInterestCalculationType;
@@ -324,6 +326,19 @@ public class SavingsAccountAssembler {
             }
         }
 
+        InterestRateChart productChart = null;
+        if (command.parameterExists(DepositsApiConstants.chartIdParamName)) {
+            Long chartId = command.longValueOfParameterNamed(DepositsApiConstants.chartIdParamName);
+            productChart = product.findChart(chartId);
+        } else {
+            productChart = product.applicableChart(submittedOnDate);
+        }
+
+        DepositAccountInterestRateChart accountChart = null;
+        if (productChart != null) {
+            accountChart = DepositAccountInterestRateChart.from(productChart);
+        }
+
         final SavingsAccount account = SavingsAccount.createNewApplicationForSubmittal(client, group, product, fieldOfficer, accountNo,
                 externalIdFactory.create(externalId), accountType, submittedOnDate, submittedBy, interestRate,
                 interestCompoundingPeriodType, interestPostingPeriodType, interestCalculationType, interestCalculationDaysInYearType,
@@ -331,6 +346,7 @@ public class SavingsAccountAssembler {
                 allowOverdraft, overdraftLimit, enforceMinRequiredBalance, minRequiredBalance, maxAllowedLienLimit, lienAllowed,
                 nominalAnnualInterestRateOverdraft, minOverdraftForInterestCalculation, withHoldTax);
         account.setHelpers(this.savingsAccountTransactionSummaryWrapper, this.savingsHelper, this.configurationDomainService);
+        account.setChart(accountChart);
 
         account.validateNewApplicationState(SAVINGS_ACCOUNT_RESOURCE_NAME);
 
@@ -466,6 +482,11 @@ public class SavingsAccountAssembler {
                 product.isLienAllowed(), product.nominalAnnualInterestRateOverdraft(), product.minOverdraftForInterestCalculation(),
                 product.withHoldTax());
         account.setHelpers(this.savingsAccountTransactionSummaryWrapper, this.savingsHelper, this.configurationDomainService);
+
+        final InterestRateChart productChart = product.applicableChart(appliedonDate);
+        if (productChart != null) {
+            account.setChart(DepositAccountInterestRateChart.from(productChart));
+        }
 
         account.validateNewApplicationState(SAVINGS_ACCOUNT_RESOURCE_NAME);
 

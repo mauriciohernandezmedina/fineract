@@ -21,6 +21,7 @@ package org.apache.fineract.portfolio.savings.data;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
+import org.apache.fineract.portfolio.savings.DepositsApiConstants;
 import org.apache.fineract.portfolio.savings.SavingsApiConstants;
 
 public class SavingsAccountConstant extends SavingsApiConstants {
@@ -36,10 +37,11 @@ public class SavingsAccountConstant extends SavingsApiConstants {
             interestCalculationTypeParamName, interestCalculationDaysInYearTypeParamName, minRequiredOpeningBalanceParamName,
             lockinPeriodFrequencyParamName, lockinPeriodFrequencyTypeParamName,
             // withdrawalFeeAmountParamName, withdrawalFeeTypeParamName,
-            withdrawalFeeForTransfersParamName, feeAmountParamName, feeOnMonthDayParamName, chargesParamName, allowOverdraftParamName,
-            overdraftLimitParamName, minRequiredBalanceParamName, enforceMinRequiredBalanceParamName, lienAllowedParamName,
-            maxAllowedLienLimitParamName, nominalAnnualInterestRateOverdraftParamName, minOverdraftForInterestCalculationParamName,
-            withHoldTaxParamName, datatables, gsimApplicationId, gsimLastApplication));
+            withdrawalFeeForTransfersParamName, feeAmountParamName, feeOnMonthDayParamName, chargesParamName,
+            DepositsApiConstants.chartIdParamName, allowOverdraftParamName, overdraftLimitParamName, minRequiredBalanceParamName,
+            enforceMinRequiredBalanceParamName, lienAllowedParamName, maxAllowedLienLimitParamName,
+            nominalAnnualInterestRateOverdraftParamName, minOverdraftForInterestCalculationParamName, withHoldTaxParamName, datatables,
+            gsimApplicationId, gsimLastApplication));
 
     /**
      * These parameters will match the class level parameters of {@link SavingsAccountData}. Where possible, we try to

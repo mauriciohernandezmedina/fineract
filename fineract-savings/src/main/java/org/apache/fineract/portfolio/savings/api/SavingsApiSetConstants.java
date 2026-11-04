@@ -41,7 +41,8 @@ public class SavingsApiSetConstants extends SavingsApiConstants {
                     "interestCalculationTypeOptions", "interestCalculationDaysInYearTypeOptions", "lockinPeriodFrequencyTypeOptions",
                     "withdrawalFeeTypeOptions", nominalAnnualInterestRateOverdraftParamName, minOverdraftForInterestCalculationParamName,
                     withHoldTaxParamName, taxGroupIdParamName, isDormancyTrackingActiveParamName, daysToInactiveParamName,
-                    daysToDormancyParamName, daysToInactiveParamName, accountMappingForPaymentParamName));
+                    daysToDormancyParamName, daysToInactiveParamName, accountMappingForPaymentParamName, chartsParamName,
+                    "interestRateCharts", "activeChart", "chartTemplate"));
 
     /**
      * These parameters will match the class level parameters of {@link SavingsAccountData}. Where possible, we try to
@@ -57,7 +58,7 @@ public class SavingsApiSetConstants extends SavingsApiConstants {
             "interestPostingPeriodTypeOptions", "interestCalculationTypeOptions", "interestCalculationDaysInYearTypeOptions",
             "lockinPeriodFrequencyTypeOptions", "withdrawalFeeTypeOptions", "withdrawalFee", "annualFee", onHoldFundsParamName,
             nominalAnnualInterestRateOverdraftParamName, minOverdraftForInterestCalculationParamName, datatables, savingsAmountOnHold,
-            accountMappingForPaymentParamName, interestPostedTillDate));
+            accountMappingForPaymentParamName, interestPostedTillDate, "accountChart", "chartTemplate"));
 
     protected static final Set<String> SAVINGS_TRANSACTION_RESPONSE_DATA_PARAMETERS = new HashSet<>(
             Arrays.asList(idParamName, "accountId", accountNoParamName, externalIdParamName, "currency", "amount", dateParamName,

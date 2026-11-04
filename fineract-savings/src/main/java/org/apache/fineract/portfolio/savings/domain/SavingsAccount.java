@@ -49,6 +49,7 @@ import jakarta.persistence.InheritanceType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
@@ -56,6 +57,7 @@ import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.math.MathContext;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
@@ -71,6 +73,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
@@ -98,8 +101,10 @@ import org.apache.fineract.portfolio.charge.exception.SavingsAccountChargeNotFou
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.portfolio.common.domain.PeriodFrequencyType;
 import org.apache.fineract.portfolio.group.domain.Group;
+import org.apache.fineract.portfolio.interestratechart.domain.InterestRateChart;
 import org.apache.fineract.portfolio.paymentdetail.domain.PaymentDetail;
 import org.apache.fineract.portfolio.savings.DepositAccountType;
+import org.apache.fineract.portfolio.savings.DepositsApiConstants;
 import org.apache.fineract.portfolio.savings.SavingsAccountTransactionType;
 import org.apache.fineract.portfolio.savings.SavingsApiConstants;
 import org.apache.fineract.portfolio.savings.SavingsCompoundingInterestPeriodType;
@@ -227,6 +232,20 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
 
     @Column(name = "nominal_annual_interest_rate", scale = 6, precision = 19, nullable = false)
     protected BigDecimal nominalAnnualInterestRate;
+
+    @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL, mappedBy = "account", orphanRemoval = true)
+    protected DepositAccountInterestRateChart chart;
+
+    public DepositAccountInterestRateChart getChart() {
+        return this.chart;
+    }
+
+    public void setChart(final DepositAccountInterestRateChart chart) {
+        this.chart = chart;
+        if (this.chart != null) {
+            this.chart.updateDepositAccountReference(this);
+        }
+    }
 
     /**
      * The interest period is the span of time at the end of which savings in a client's account earn interest.
@@ -755,6 +774,8 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
                     .fromInt(this.interestCalculationType);
             final BigDecimal interestRateAsFraction = getEffectiveInterestRateAsFraction(mc, upToInterestCalculationDate);
             final BigDecimal overdraftInterestRateAsFraction = getEffectiveOverdraftInterestRateAsFraction(mc);
+            final Function<BigDecimal, BigDecimal> tieredRateResolver = getTieredInterestRateAsFractionResolver(mc,
+                    upToInterestCalculationDate);
             final Collection<Long> interestPostTransactions = this.savingsHelper.fetchPostInterestTransactionIds(getId());
             final Money minBalanceForInterestCalculation = Money.of(getCurrency(), minBalanceForInterestCalculation());
             final Money minOverdraftForInterestCalculation = Money.of(getCurrency(), this.minOverdraftForInterestCalculation);
@@ -782,6 +803,7 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
                         interestRateAsFraction, daysInYearType.getValue(), upToInterestCalculationDate, interestPostTransactions,
                         isInterestTransfer, minBalanceForInterestCalculation, isSavingsInterestPostingAtCurrentPeriodEnd,
                         overdraftInterestRateAsFraction, minOverdraftForInterestCalculation, isUserPosting, financialYearBeginningMonth);
+                postingPeriod.setTieredRateResolver(tieredRateResolver);
 
                 periodStartingBalance = postingPeriod.closingBalance();
 
@@ -808,7 +830,39 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         return this.nominalAnnualInterestRateOverdraft.divide(BigDecimal.valueOf(100L), mc);
     }
 
+    protected Function<BigDecimal, BigDecimal> getTieredInterestRateAsFractionResolver(final MathContext mc,
+            final LocalDate upToInterestCalculationDate) {
+        if (this.depositAccountType() == DepositAccountType.SAVINGS_DEPOSIT && this.chart != null
+                && this.chart.isPrimaryGroupingByAmount()) {
+            return balance -> {
+                if (balance == null || balance.compareTo(BigDecimal.ZERO) <= 0) {
+                    return BigDecimal.ZERO;
+                }
+                BigDecimal rate = this.chart.getApplicableInterestRate(balance, upToInterestCalculationDate, upToInterestCalculationDate,
+                        this.client);
+                if (rate == null && balance.scale() > 0) {
+                    rate = this.chart.getApplicableInterestRate(balance.setScale(0, RoundingMode.FLOOR), upToInterestCalculationDate,
+                            upToInterestCalculationDate, this.client);
+                }
+                return rate != null ? rate.divide(BigDecimal.valueOf(100L), mc) : BigDecimal.ZERO;
+            };
+        }
+        return null;
+    }
+
     public BigDecimal getEffectiveInterestRateAsFractionAccrual(final MathContext mc, final LocalDate upToInterestCalculationDate) {
+        if (this.depositAccountType() == DepositAccountType.SAVINGS_DEPOSIT && this.chart != null
+                && this.chart.isPrimaryGroupingByAmount()) {
+            final BigDecimal balance = this.summary != null && this.summary.getAccountBalance() != null ? this.summary.getAccountBalance()
+                    : BigDecimal.ZERO;
+            BigDecimal rate = this.chart.getApplicableInterestRate(balance, upToInterestCalculationDate, upToInterestCalculationDate,
+                    this.client);
+            if (rate == null && balance.scale() > 0) {
+                rate = this.chart.getApplicableInterestRate(balance.setScale(0, RoundingMode.FLOOR), upToInterestCalculationDate,
+                        upToInterestCalculationDate, this.client);
+            }
+            return rate != null ? rate.divide(BigDecimal.valueOf(100L), mc) : BigDecimal.ZERO;
+        }
         return this.nominalAnnualInterestRate.divide(BigDecimal.valueOf(100L), mc);
     }
 
@@ -818,7 +872,7 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
     }
 
     private boolean hasInterestCalculation() {
-        return !MathUtil.isEmpty(nominalAnnualInterestRate);
+        return !MathUtil.isEmpty(nominalAnnualInterestRate) || this.chart != null;
     }
 
     private boolean hasOverdraftInterestCalculation() {
@@ -1739,6 +1793,24 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
                 baseDataValidator.reset().parameter(withHoldTaxParamName).failWithCode("not.supported.for.this.account");
             }
         }
+        if (this.depositAccountType() == DepositAccountType.SAVINGS_DEPOSIT && this.product != null
+                && !actualChanges.containsKey(SavingsApiConstants.productIdParamName)) {
+            InterestRateChart productChart = null;
+            if (command.parameterExists(DepositsApiConstants.chartIdParamName)) {
+                final Long chartId = command.longValueOfParameterNamed(DepositsApiConstants.chartIdParamName);
+                productChart = this.product.findChart(chartId);
+                if (productChart == null) {
+                    baseDataValidator.reset().parameter(DepositsApiConstants.chartIdParamName).value(chartId)
+                            .failWithCodeNoParameterAddedToErrorCode("interest.rate.chart.not.available");
+                }
+                actualChanges.put(DepositsApiConstants.chartIdParamName, chartId);
+            } else if (actualChanges.containsKey(SavingsApiConstants.submittedOnDateParamName)) {
+                productChart = this.product.applicableChart(this.submittedOnDate);
+            }
+            if (productChart != null) {
+                setChart(DepositAccountInterestRateChart.from(productChart));
+            }
+        }
         validateLockinDetails(baseDataValidator);
         esnureOverdraftLimitsSetForOverdraftAccounts();
     }
@@ -1870,6 +1942,14 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
     public void update(final SavingsProduct product) {
         this.product = product;
         this.minBalanceForInterestCalculation = product.minBalanceForInterestCalculation();
+        if (this.depositAccountType() == DepositAccountType.SAVINGS_DEPOSIT) {
+            final InterestRateChart productChart = product.applicableChart(this.submittedOnDate);
+            if (productChart != null) {
+                setChart(DepositAccountInterestRateChart.from(productChart));
+            } else {
+                setChart(null);
+            }
+        }
     }
 
     public void update(final Staff savingsOfficer) {
@@ -3382,6 +3462,9 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         transactions.size();
         charges.size();
         savingsOfficerHistory.size();
+        if (this.chart != null) {
+            this.chart.setOfChartSlabs().size();
+        }
         if (group != null) {
             Office dummyOffice = group.getOffice();
         } // Ensure lazy loading of group if set

@@ -22,6 +22,7 @@ import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
+import lombok.Getter;
 import org.apache.fineract.infrastructure.codes.data.CodeValueData;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 import org.apache.fineract.organisation.monetary.data.CurrencyData;
@@ -31,6 +32,7 @@ import org.apache.fineract.portfolio.interestratechart.data.InterestRateChartSla
 /**
  * Immutable data object representing deposit accounts Interest rate Slabs.
  */
+@Getter
 public final class DepositAccountInterestRateChartSlabData {
 
     private final Long id;
