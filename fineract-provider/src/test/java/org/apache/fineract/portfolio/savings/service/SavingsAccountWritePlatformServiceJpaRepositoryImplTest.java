@@ -63,9 +63,12 @@ import org.apache.fineract.portfolio.account.service.AccountTransfersReadPlatfor
 import org.apache.fineract.portfolio.charge.domain.ChargeRepositoryWrapper;
 import org.apache.fineract.portfolio.note.domain.NoteRepository;
 import org.apache.fineract.portfolio.paymentdetail.service.PaymentDetailWritePlatformService;
+import org.apache.fineract.portfolio.savings.data.DepositAccountInterestRateChartData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountChargeDataValidator;
+import org.apache.fineract.portfolio.savings.data.SavingsAccountData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountDataValidator;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionDataValidator;
+import org.apache.fineract.portfolio.savings.domain.DepositAccountInterestRateChart;
 import org.apache.fineract.portfolio.savings.domain.DepositAccountOnHoldTransactionRepository;
 import org.apache.fineract.portfolio.savings.domain.GSIMRepositoy;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccount;
@@ -458,5 +461,80 @@ class SavingsAccountWritePlatformServiceJpaRepositoryImplTest {
 
         // Then
         assertThat(result.getTransactionId()).isEqualTo(expectedTransactionId.toString());
+    }
+
+    @Test
+    void postInterest_shouldPostInterestWhenNominalRateIsZeroAndAccountHasChart() {
+        Long savingsId = 1L;
+        LocalDate transactionDate = LocalDate.of(2024, 4, 5);
+        ExternalId externalId = new ExternalId("interest-posting-external-id");
+
+        setupTenantContext(transactionDate);
+
+        JsonCommand command = mock(JsonCommand.class);
+        SavingsAccount account = mock(SavingsAccount.class);
+        DepositAccountInterestRateChart chart = mock(DepositAccountInterestRateChart.class);
+        SavingsAccountTransaction postingTransaction = mock(SavingsAccountTransaction.class);
+        MonetaryCurrency currency = new MonetaryCurrency("USD", 2, 0);
+        List<SavingsAccountTransaction> transactions = new ArrayList<>();
+
+        when(command.getSavingsId()).thenReturn(savingsId);
+        when(command.booleanPrimitiveValueOfParameterNamed("isPostInterestAsOn")).thenReturn(false);
+        when(externalIdFactory.createFromCommand(command, "externalId")).thenReturn(externalId);
+        when(savingAccountAssembler.getPivotConfigStatus()).thenReturn(false);
+        when(savingAccountAssembler.assembleFrom(savingsId, false)).thenReturn(account);
+        when(account.getClient()).thenReturn(null);
+        when(account.group()).thenReturn(null);
+        when(account.getTransactions()).thenReturn(transactions);
+        when(account.accountSubmittedOrActivationDate()).thenReturn(transactionDate.minusDays(1));
+        when(account.getNominalAnnualInterestRate()).thenReturn(BigDecimal.ZERO);
+        when(account.getChart()).thenReturn(chart);
+        when(account.allowOverdraft()).thenReturn(false);
+        when(account.findExistingTransactionIds()).thenReturn(new HashSet<>());
+        when(account.findExistingReversedTransactionIds()).thenReturn(new HashSet<>());
+        when(account.getCurrency()).thenReturn(currency);
+        when(account.deriveAccountingBridgeData(any(), any(), any(), anyBoolean(), anyBoolean())).thenReturn(Collections.emptyMap());
+        when(account.officeId()).thenReturn(1L);
+        when(account.clientId()).thenReturn(2L);
+        when(account.groupId()).thenReturn(3L);
+        when(configurationDomainService.isSavingsInterestPostingAtCurrentPeriodEnd()).thenReturn(false);
+        when(configurationDomainService.retrieveFinancialYearBeginningMonth()).thenReturn(1);
+        when(postingTransaction.getId()).thenReturn(null);
+
+        Mockito.doAnswer(invocation -> {
+            transactions.add(postingTransaction);
+            return null;
+        }).when(savingsAccountPostInterestService).postInterest(any(), any(), any(), anyBoolean(), anyBoolean(), any(), any(), anyBoolean(),
+                anyBoolean());
+
+        service.postInterest(command);
+
+        verify(savingsAccountPostInterestService).postInterest(any(), any(), any(), anyBoolean(), anyBoolean(), any(), any(), anyBoolean(),
+                anyBoolean());
+        verify(savingsAccountTransactionRepository).save(postingTransaction);
+    }
+
+    @Test
+    void postInterestBatchDto_shouldPostInterestWhenNominalRateIsZeroAndAccountDataHasChart() {
+        LocalDate transactionDate = LocalDate.of(2024, 4, 5);
+        setupTenantContext(transactionDate);
+
+        SavingsAccountData savingsAccountData = mock(SavingsAccountData.class);
+        DepositAccountInterestRateChartData accountChart = mock(DepositAccountInterestRateChartData.class);
+
+        when(savingsAccountData.getNominalAnnualInterestRate()).thenReturn(BigDecimal.ZERO);
+        when(savingsAccountData.getAccountChart()).thenReturn(accountChart);
+        when(savingsAccountData.isAllowOverdraft()).thenReturn(false);
+        when(savingsAccountData.getSavingsAccountTransactionData()).thenReturn(new ArrayList<>());
+        when(configurationDomainService.isSavingsInterestPostingAtCurrentPeriodEnd()).thenReturn(false);
+        when(configurationDomainService.retrieveFinancialYearBeginningMonth()).thenReturn(1);
+        when(savingsAccountInterestPostingService.postInterest(any(), any(), anyBoolean(), anyBoolean(), any(), any(), anyBoolean(), any()))
+                .thenReturn(savingsAccountData);
+
+        SavingsAccountData result = service.postInterest(savingsAccountData, false, null, false);
+
+        assertThat(result).isNotNull();
+        verify(savingsAccountInterestPostingService).postInterest(any(), any(), anyBoolean(), anyBoolean(), any(), any(), anyBoolean(),
+                any());
     }
 }

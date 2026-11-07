@@ -20,30 +20,49 @@ package org.apache.fineract.portfolio.savings.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
+import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.core.domain.LocalDateInterval;
+import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
+import org.apache.fineract.organisation.monetary.data.CurrencyData;
 import org.apache.fineract.organisation.monetary.domain.MonetaryCurrency;
 import org.apache.fineract.organisation.monetary.domain.Money;
 import org.apache.fineract.organisation.monetary.domain.MoneyHelper;
+import org.apache.fineract.portfolio.account.service.AccountTransfersReadPlatformService;
 import org.apache.fineract.portfolio.interestratechart.domain.InterestRateChart;
 import org.apache.fineract.portfolio.interestratechart.domain.InterestRateChartFields;
 import org.apache.fineract.portfolio.interestratechart.domain.InterestRateChartSlab;
 import org.apache.fineract.portfolio.interestratechart.domain.InterestRateChartSlabFields;
+import org.apache.fineract.portfolio.savings.DepositAccountType;
+import org.apache.fineract.portfolio.savings.SavingsAccountTransactionType;
 import org.apache.fineract.portfolio.savings.SavingsCompoundingInterestPeriodType;
 import org.apache.fineract.portfolio.savings.SavingsInterestCalculationDaysInYearType;
 import org.apache.fineract.portfolio.savings.SavingsInterestCalculationType;
+import org.apache.fineract.portfolio.savings.SavingsPostingInterestPeriodType;
+import org.apache.fineract.portfolio.savings.data.DepositAccountInterestRateChartData;
+import org.apache.fineract.portfolio.savings.data.DepositAccountInterestRateChartSlabData;
+import org.apache.fineract.portfolio.savings.data.SavingsAccountData;
+import org.apache.fineract.portfolio.savings.data.SavingsAccountSummaryData;
+import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionData;
+import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionEnumData;
 import org.apache.fineract.portfolio.savings.domain.interest.PostingPeriod;
 import org.apache.fineract.portfolio.savings.domain.interest.SavingsAccountTransactionDetailsForPostingPeriod;
+import org.apache.fineract.portfolio.savings.service.SavingsAccountInterestPostingServiceImpl;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -68,6 +87,7 @@ class TieredSavingsInterestCalculationTest {
         if (moneyHelperMock != null) {
             moneyHelperMock.close();
         }
+        ThreadLocalContextUtil.reset();
     }
 
     private DepositAccountInterestRateChart buildWholeBalanceChart() {
@@ -168,5 +188,72 @@ class TieredSavingsInterestCalculationTest {
         assertNotNull(earned);
         // 60,000 * 0.09 * (31 / 365) = 458.63013... -> redondeado a 2 decimales MXN = 458.63
         assertEquals(new BigDecimal("458.63"), earned);
+    }
+
+    @Test
+    void shouldCalculateTieredInterestInBatchPostingServiceFromDto() {
+        final DepositAccountInterestRateChartSlabData slab1 = DepositAccountInterestRateChartSlabData.instance(1L, "Nivel 1", null, null,
+                null, new BigDecimal("0"), new BigDecimal("10000"), new BigDecimal("3.00"), null);
+        final DepositAccountInterestRateChartSlabData slab2 = DepositAccountInterestRateChartSlabData.instance(2L, "Nivel 2", null, null,
+                null, new BigDecimal("10001"), new BigDecimal("50000"), new BigDecimal("6.00"), null);
+        final DepositAccountInterestRateChartSlabData slab3 = DepositAccountInterestRateChartSlabData.instance(3L, "Nivel 3", null, null,
+                null, new BigDecimal("50001"), null, new BigDecimal("9.00"), null);
+
+        final DepositAccountInterestRateChartData chartData = DepositAccountInterestRateChartData.instance(1L, "Tabla Saldo", "Escalonada",
+                LocalDate.of(2026, 1, 1), null, true, 100L, "SA-100", List.of(slab1, slab2, slab3), null);
+
+        final LocalDate startDate = LocalDate.of(2026, 1, 1);
+        final LocalDate endDate = LocalDate.of(2026, 1, 31);
+        ThreadLocalContextUtil.setBusinessDates(new HashMap<>(Map.of(BusinessDateType.BUSINESS_DATE, endDate)));
+        final CurrencyData currencyData = new CurrencyData("MXN", "Mexican Peso", 2, 0, "$", "currency.MXN");
+
+        final AccountTransfersReadPlatformService accountTransfersReadPlatformService = Mockito
+                .mock(AccountTransfersReadPlatformService.class);
+        when(accountTransfersReadPlatformService.fetchPostInterestTransactionIds(any())).thenReturn(Collections.emptyList());
+        final SavingsHelper savingsHelper = new SavingsHelper(accountTransfersReadPlatformService);
+        final SavingsAccountInterestPostingServiceImpl postingService = new SavingsAccountInterestPostingServiceImpl(savingsHelper);
+
+        final SavingsAccountData savingsAccountData = Mockito.mock(SavingsAccountData.class);
+        final SavingsAccountSummaryData summary = new SavingsAccountSummaryData(currencyData, new BigDecimal("25000.00"), BigDecimal.ZERO,
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("25000.00"), BigDecimal.ZERO,
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, null, new BigDecimal("25000.00"), null);
+
+        when(savingsAccountData.getCurrency()).thenReturn(currencyData);
+        when(savingsAccountData.getSummary()).thenReturn(summary);
+        when(savingsAccountData.getStartInterestCalculationDate()).thenReturn(startDate);
+        when(savingsAccountData.getActivationLocalDate()).thenReturn(startDate);
+        when(savingsAccountData.getInterestPostingPeriodTypeId()).thenReturn(SavingsPostingInterestPeriodType.MONTHLY.getValue());
+        when(savingsAccountData.getInterestCompoundingPeriodTypeId()).thenReturn(SavingsCompoundingInterestPeriodType.MONTHLY.getValue());
+        when(savingsAccountData.getInterestCalculationDaysInYearTypeId())
+                .thenReturn(SavingsInterestCalculationDaysInYearType.DAYS_365.getValue());
+        when(savingsAccountData.getInterestCalculationTypeId()).thenReturn(SavingsInterestCalculationType.DAILY_BALANCE.getValue());
+        when(savingsAccountData.getNominalAnnualInterestRate()).thenReturn(BigDecimal.ZERO);
+        when(savingsAccountData.getNominalAnnualInterestRateOverdraft()).thenReturn(BigDecimal.ZERO);
+        when(savingsAccountData.getMinBalanceForInterestCalculation()).thenReturn(BigDecimal.ZERO);
+        when(savingsAccountData.getMinOverdraftForInterestCalculation()).thenReturn(BigDecimal.ZERO);
+        when(savingsAccountData.isAllowOverdraft()).thenReturn(false);
+        when(savingsAccountData.getAccountChart()).thenReturn(chartData);
+        when(savingsAccountData.depositAccountType()).thenReturn(DepositAccountType.SAVINGS_DEPOSIT);
+        when(savingsAccountData.getSavingsAccountTransactionSummaryWrapper()).thenReturn(new SavingsAccountTransactionDataSummaryWrapper());
+
+        final SavingsAccountTransactionEnumData depositType = new SavingsAccountTransactionEnumData(1L,
+                SavingsAccountTransactionType.DEPOSIT.getCode(), "Deposit");
+        final SavingsAccountTransactionData tx = SavingsAccountTransactionData.create(1L, depositType, null, 100L, "SA-100", startDate,
+                currencyData, new BigDecimal("25000.00"), BigDecimal.ZERO, new BigDecimal("25000.00"), false, startDate, false,
+                BigDecimal.ZERO, null);
+
+        final List<SavingsAccountTransactionData> txList = new ArrayList<>(List.of(tx));
+        when(savingsAccountData.getSavingsAccountTransactionData()).thenReturn(txList);
+
+        final List<PostingPeriod> periods = postingService.calculateInterestUsing(MC, endDate, false, false, 1, null, false,
+                savingsAccountData);
+
+        assertNotNull(periods);
+        assertEquals(1, periods.size());
+        final PostingPeriod period = periods.get(0);
+        final BigDecimal earned = period.getInterestEarned().getAmount();
+        assertNotNull(earned);
+        // 25,000 * 0.06 * (31 / 365) = 127.39726... -> redondeado a 2 decimales MXN = 127.40
+        assertEquals(new BigDecimal("127.40"), earned);
     }
 }

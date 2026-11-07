@@ -605,7 +605,7 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
                 .isSavingsInterestPostingAtCurrentPeriodEnd();
         final Integer financialYearBeginningMonth = this.configurationDomainService.retrieveFinancialYearBeginningMonth();
 
-        if (account.getNominalAnnualInterestRate().compareTo(BigDecimal.ZERO) > 0
+        if (account.getNominalAnnualInterestRate().compareTo(BigDecimal.ZERO) > 0 || account.getChart() != null
                 || (account.allowOverdraft() && account.getNominalAnnualInterestRateOverdraft().compareTo(BigDecimal.ZERO) > 0)) {
             final Set<Long> existingTransactionIds = new HashSet<>();
             final Set<Long> existingReversedTransactionIds = new HashSet<>();
@@ -678,8 +678,9 @@ public class SavingsAccountWritePlatformServiceJpaRepositoryImpl implements Savi
                 .isSavingsInterestPostingAtCurrentPeriodEnd();
         final Integer financialYearBeginningMonth = this.configurationDomainService.retrieveFinancialYearBeginningMonth();
 
-        if (MathUtil.isGreaterThanZero(savingsAccountData.getNominalAnnualInterestRate()) || (savingsAccountData.isAllowOverdraft()
-                && MathUtil.isGreaterThanZero(savingsAccountData.getNominalAnnualInterestRateOverdraft()))) {
+        if (MathUtil.isGreaterThanZero(savingsAccountData.getNominalAnnualInterestRate()) || savingsAccountData.getAccountChart() != null
+                || (savingsAccountData.isAllowOverdraft()
+                        && MathUtil.isGreaterThanZero(savingsAccountData.getNominalAnnualInterestRateOverdraft()))) {
             final Set<Long> existingTransactionIds = new HashSet<>();
             final Set<Long> existingReversedTransactionIds = new HashSet<>();
             updateExistingTransactionsDetails(savingsAccountData, existingTransactionIds, existingReversedTransactionIds);
