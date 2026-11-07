@@ -149,6 +149,7 @@ public class SavingsAccrualWritePlatformServiceImpl implements SavingsAccrualWri
 
             postingPeriod.setOverdraftInterestRateAsFraction(
                     savingsAccount.getNominalAnnualInterestRateOverdraft().divide(BigDecimal.valueOf(100), mc));
+            postingPeriod.setTieredRateResolver(savingsAccount.getTieredInterestRateAsFractionResolver(mc, tillDate));
             periodStartingBalance = postingPeriod.closingBalance();
 
             allPostingPeriods.add(postingPeriod);

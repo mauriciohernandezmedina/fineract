@@ -76,9 +76,12 @@ import org.apache.fineract.portfolio.savings.SavingsInterestCalculationDaysInYea
 import org.apache.fineract.portfolio.savings.SavingsInterestCalculationType;
 import org.apache.fineract.portfolio.savings.SavingsPeriodFrequencyType;
 import org.apache.fineract.portfolio.savings.SavingsPostingInterestPeriodType;
+import org.apache.fineract.portfolio.savings.data.DepositAccountInterestRateChartData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionData;
+import org.apache.fineract.portfolio.savings.exception.DepositAccountInterestRateChartNotFoundException;
 import org.apache.fineract.portfolio.savings.exception.SavingsProductNotFoundException;
+import org.apache.fineract.portfolio.savings.service.DepositAccountInterestRateChartReadPlatformService;
 import org.apache.fineract.useradministration.domain.AppUser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -103,6 +106,7 @@ public class SavingsAccountAssembler {
     private final JdbcTemplate jdbcTemplate;
     private final ConfigurationDomainService configurationDomainService;
     private final ExternalIdFactory externalIdFactory;
+    private final DepositAccountInterestRateChartReadPlatformService accountChartReadPlatformService;
 
     @Autowired
     public SavingsAccountAssembler(final SavingsAccountTransactionSummaryWrapper savingsAccountTransactionSummaryWrapper,
@@ -112,7 +116,8 @@ public class SavingsAccountAssembler {
             final SavingsAccountRepositoryWrapper savingsAccountRepository,
             final SavingsAccountChargeAssembler savingsAccountChargeAssembler, final FromJsonHelper fromApiJsonHelper,
             final AccountTransfersReadPlatformService accountTransfersReadPlatformService, final JdbcTemplate jdbcTemplate,
-            final ConfigurationDomainService configurationDomainService, ExternalIdFactory externalIdFactory) {
+            final ConfigurationDomainService configurationDomainService, ExternalIdFactory externalIdFactory,
+            final DepositAccountInterestRateChartReadPlatformService accountChartReadPlatformService) {
         this.savingsAccountTransactionSummaryWrapper = savingsAccountTransactionSummaryWrapper;
         this.savingsAccountTransactionDataSummaryWrapper = savingsAccountTransactionDataSummaryWrapper;
         this.clientRepository = clientRepository;
@@ -126,6 +131,7 @@ public class SavingsAccountAssembler {
         this.jdbcTemplate = jdbcTemplate;
         this.configurationDomainService = configurationDomainService;
         this.externalIdFactory = externalIdFactory;
+        this.accountChartReadPlatformService = accountChartReadPlatformService;
     }
 
     /**
@@ -423,6 +429,15 @@ public class SavingsAccountAssembler {
             account.getSavingsAccountTransactionData().removeAll(removalList);
         } else {
             account.getSummary().setRunningBalanceOnPivotDate(BigDecimal.ZERO);
+        }
+        if (this.accountChartReadPlatformService != null && account.getId() != null && account.getAccountChart() == null) {
+            try {
+                final DepositAccountInterestRateChartData accountChart = this.accountChartReadPlatformService
+                        .retrieveOneWithSlabsOnAccountId(account.getId());
+                account.setAccountChart(accountChart);
+            } catch (final DepositAccountInterestRateChartNotFoundException ignored) {
+                // Account has no tiered interest rate chart
+            }
         }
         account.setHelpers(this.savingsAccountTransactionDataSummaryWrapper, this.savingsHelper);
         return account;

@@ -20,6 +20,7 @@ package org.apache.fineract.portfolio.savings.service;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -28,6 +29,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.core.domain.LocalDateInterval;
@@ -40,6 +42,8 @@ import org.apache.fineract.portfolio.savings.SavingsCompoundingInterestPeriodTyp
 import org.apache.fineract.portfolio.savings.SavingsInterestCalculationDaysInYearType;
 import org.apache.fineract.portfolio.savings.SavingsInterestCalculationType;
 import org.apache.fineract.portfolio.savings.SavingsPostingInterestPeriodType;
+import org.apache.fineract.portfolio.savings.data.DepositAccountInterestRateChartData;
+import org.apache.fineract.portfolio.savings.data.DepositAccountInterestRateChartSlabData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountData;
 import org.apache.fineract.portfolio.savings.data.SavingsAccountTransactionData;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountChargesPaidByData;
@@ -205,7 +209,8 @@ public class SavingsAccountInterestPostingServiceImpl implements SavingsAccountI
             final Collection<Long> interestPostTransactions, final boolean isInterestTransfer, final Money minBalanceForInterestCalculation,
             final boolean isSavingsInterestPostingAtCurrentPeriodEnd, final BigDecimal overdraftInterestRateAsFraction,
             final Money minOverdraftForInterestCalculation, final boolean isUserPosting, final Integer financialYearBeginningMonth,
-            final boolean allowOverdraft, final List<PostingPeriod> allPostingPeriods, Boolean isOverdraftTransacction) {
+            final boolean allowOverdraft, final List<PostingPeriod> allPostingPeriods, Boolean isOverdraftTransacction,
+            final Function<BigDecimal, BigDecimal> tieredRateResolver) {
 
         if (txs == null || txs.isEmpty()) {
             return periodStartingBalance;
@@ -216,6 +221,8 @@ public class SavingsAccountInterestPostingServiceImpl implements SavingsAccountI
                 interestPostTransactions, isInterestTransfer, minBalanceForInterestCalculation, isSavingsInterestPostingAtCurrentPeriodEnd,
                 overdraftInterestRateAsFraction, minOverdraftForInterestCalculation, isUserPosting, financialYearBeginningMonth,
                 allowOverdraft);
+
+        postingPeriod.setTieredRateResolver(tieredRateResolver);
 
         periodStartingBalance = postingPeriod.closingBalance();
         postingPeriod.setOverdraftInterest(isOverdraftTransacction);
@@ -299,6 +306,8 @@ public class SavingsAccountInterestPostingServiceImpl implements SavingsAccountI
         final Money minOverdraftForInterestCalculation = Money.of(savingsAccountData.getCurrency(),
                 savingsAccountData.getMinOverdraftForInterestCalculation());
         final MonetaryCurrency monetaryCurrency = MonetaryCurrency.fromCurrencyData(savingsAccountData.getCurrency());
+        final Function<BigDecimal, BigDecimal> tieredRateResolver = getTieredInterestRateAsFractionResolver(mc, upToInterestCalculationDate,
+                savingsAccountData);
 
         for (final LocalDateInterval periodInterval : postingPeriodIntervals) {
 
@@ -323,14 +332,14 @@ public class SavingsAccountInterestPostingServiceImpl implements SavingsAccountI
                         upToInterestCalculationDate, interestPostTransactions, isInterestTransfer, minBalanceForInterestCalculation,
                         isSavingsInterestPostingAtCurrentPeriodEnd, overdraftInterestRateAsFraction, minOverdraftForInterestCalculation,
                         isUserPosting, financialYearBeginningMonth, savingsAccountData.isAllowOverdraft(), allPostingPeriods,
-                        isOverdraftAccountType ? true : false);
+                        isOverdraftAccountType ? true : false, tieredRateResolver);
 
                 periodStartingBalance = appendPostingPeriodIfAny(periodInterval, periodStartingBalance, secondaryInterestPublication,
                         monetaryCurrency, compoundingPeriodType, interestCalculationType, interestRateAsFraction, daysInYearType.getValue(),
                         upToInterestCalculationDate, interestPostTransactions, isInterestTransfer, minBalanceForInterestCalculation,
                         isSavingsInterestPostingAtCurrentPeriodEnd, overdraftInterestRateAsFraction, minOverdraftForInterestCalculation,
                         isUserPosting, financialYearBeginningMonth, savingsAccountData.isAllowOverdraft(), allPostingPeriods,
-                        isOverdraftAccountType ? false : true);
+                        isOverdraftAccountType ? false : true, tieredRateResolver);
 
             } else {
                 periodStartingBalance = appendPostingPeriodIfAny(periodInterval, periodStartingBalance,
@@ -338,7 +347,8 @@ public class SavingsAccountInterestPostingServiceImpl implements SavingsAccountI
                         interestCalculationType, interestRateAsFraction, daysInYearType.getValue(), upToInterestCalculationDate,
                         interestPostTransactions, isInterestTransfer, minBalanceForInterestCalculation,
                         isSavingsInterestPostingAtCurrentPeriodEnd, overdraftInterestRateAsFraction, minOverdraftForInterestCalculation,
-                        isUserPosting, financialYearBeginningMonth, savingsAccountData.isAllowOverdraft(), allPostingPeriods, false);
+                        isUserPosting, financialYearBeginningMonth, savingsAccountData.isAllowOverdraft(), allPostingPeriods, false,
+                        tieredRateResolver);
             }
         }
 
@@ -448,6 +458,43 @@ public class SavingsAccountInterestPostingServiceImpl implements SavingsAccountI
     private BigDecimal getEffectiveInterestRateAsFraction(final MathContext mc, final LocalDate upToInterestCalculationDate,
             final SavingsAccountData savingsAccountData) {
         return savingsAccountData.getNominalAnnualInterestRate().divide(BigDecimal.valueOf(100L), mc);
+    }
+
+    protected Function<BigDecimal, BigDecimal> getTieredInterestRateAsFractionResolver(final MathContext mc,
+            final LocalDate upToInterestCalculationDate, final SavingsAccountData savingsAccountData) {
+        if (savingsAccountData.getAccountChart() instanceof DepositAccountInterestRateChartData chart
+                && chart.isPrimaryGroupingByAmount()) {
+            if (chart.isFromDateAfter(upToInterestCalculationDate)
+                    || (chart.endDate() != null && DateUtils.isAfter(upToInterestCalculationDate, chart.endDate()))
+                    || chart.getChartSlabs() == null || chart.getChartSlabs().isEmpty()) {
+                return null;
+            }
+            return balance -> {
+                if (balance == null || balance.compareTo(BigDecimal.ZERO) <= 0) {
+                    return BigDecimal.ZERO;
+                }
+                BigDecimal rate = null;
+                for (final DepositAccountInterestRateChartSlabData slab : chart.getChartSlabs()) {
+                    if (slab.getAmountRangeFrom() != null && balance.compareTo(slab.getAmountRangeFrom()) >= 0
+                            && (slab.getAmountRangeTo() == null || balance.compareTo(slab.getAmountRangeTo()) <= 0)) {
+                        rate = slab.getAnnualInterestRate();
+                        break;
+                    }
+                }
+                if (rate == null && balance.scale() > 0) {
+                    final BigDecimal flooredBalance = balance.setScale(0, RoundingMode.FLOOR);
+                    for (final DepositAccountInterestRateChartSlabData slab : chart.getChartSlabs()) {
+                        if (slab.getAmountRangeFrom() != null && flooredBalance.compareTo(slab.getAmountRangeFrom()) >= 0
+                                && (slab.getAmountRangeTo() == null || flooredBalance.compareTo(slab.getAmountRangeTo()) <= 0)) {
+                            rate = slab.getAnnualInterestRate();
+                            break;
+                        }
+                    }
+                }
+                return rate != null ? rate.divide(BigDecimal.valueOf(100L), mc) : BigDecimal.ZERO;
+            };
+        }
+        return null;
     }
 
     public List<SavingsAccountTransactionData> getTransactions(final SavingsAccountData savingsAccountData) {

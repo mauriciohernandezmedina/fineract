@@ -830,7 +830,7 @@ public class SavingsAccount extends AbstractAuditableWithUTCDateTimeCustom<Long>
         return this.nominalAnnualInterestRateOverdraft.divide(BigDecimal.valueOf(100L), mc);
     }
 
-    protected Function<BigDecimal, BigDecimal> getTieredInterestRateAsFractionResolver(final MathContext mc,
+    public Function<BigDecimal, BigDecimal> getTieredInterestRateAsFractionResolver(final MathContext mc,
             final LocalDate upToInterestCalculationDate) {
         if (this.depositAccountType() == DepositAccountType.SAVINGS_DEPOSIT && this.chart != null
                 && this.chart.isPrimaryGroupingByAmount()) {
