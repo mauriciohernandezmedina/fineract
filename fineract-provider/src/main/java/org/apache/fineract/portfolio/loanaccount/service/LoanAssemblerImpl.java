@@ -69,6 +69,7 @@ import org.apache.fineract.portfolio.group.domain.Group;
 import org.apache.fineract.portfolio.group.domain.GroupRepositoryWrapper;
 import org.apache.fineract.portfolio.loanaccount.api.LoanApiConstants;
 import org.apache.fineract.portfolio.loanaccount.data.LoanChargeData;
+import org.apache.fineract.portfolio.loanaccount.data.LoanTermVariationsData;
 import org.apache.fineract.portfolio.loanaccount.domain.GLIMAccountInfoRepository;
 import org.apache.fineract.portfolio.loanaccount.domain.GroupLoanIndividualMonitoringAccount;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
@@ -80,6 +81,7 @@ import org.apache.fineract.portfolio.loanaccount.domain.LoanPaymentAllocationRul
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepaymentScheduleTransactionProcessorFactory;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanStatus;
+import org.apache.fineract.portfolio.loanaccount.domain.LoanTermVariations;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanTopupDetails;
 import org.apache.fineract.portfolio.loanaccount.domain.transactionprocessor.LoanRepaymentScheduleTransactionProcessor;
 import org.apache.fineract.portfolio.loanaccount.domain.transactionprocessor.impl.AdvancedPaymentScheduleTransactionProcessor;
@@ -286,6 +288,7 @@ public class LoanAssemblerImpl implements LoanAssembler {
         }
 
         loanSchedule.updateLoanSchedule(loanApplication, loanScheduleModel);
+        populateLoanTermVariationsFromJson(element, loanApplication);
 
         copyAdvancedPaymentRulesIfApplicable(transactionProcessingStrategyCode, loanProduct, loanApplication);
         // TODO: review
@@ -857,6 +860,14 @@ public class LoanAssemblerImpl implements LoanAssembler {
             loan.updateAllowFullTermForTranche(allowFullTermForTranche);
         }
 
+        if (command.parameterExists(LoanApiConstants.loanTermVariationsParameterName)) {
+            loan.getLoanTermVariations().clear();
+            populateLoanTermVariationsFromJson(command.parsedJson(), loan);
+            changes.put(LoanApiConstants.loanTermVariationsParameterName,
+                    command.jsonFragment(LoanApiConstants.loanTermVariationsParameterName));
+            changes.put(Loan.RECALCULATE_LOAN_SCHEDULE, true);
+        }
+
         if (changes.containsKey("recalculateLoanSchedule")) {
             changes.remove("recalculateLoanSchedule");
 
@@ -922,5 +933,21 @@ public class LoanAssemblerImpl implements LoanAssembler {
         actualChanges.put(Loan.REJECTED_ON_DATE, rejectedOn.format(fmt));
         actualChanges.put(Loan.CLOSED_ON_DATE, rejectedOn.format(fmt));
         return actualChanges;
+    }
+
+    private void populateLoanTermVariationsFromJson(final JsonElement element, final Loan loan) {
+        final List<LoanTermVariationsData> extractedVariations = new ArrayList<>();
+        this.loanScheduleAssembler.extractLoanTermVariationsFromJson(element, extractedVariations);
+        if (extractedVariations.isEmpty()) {
+            return;
+        }
+        for (final LoanTermVariationsData data : extractedVariations) {
+            if (data.getTermVariationType() != null && data.getTermVariationType().getValue() != null) {
+                loan.getLoanTermVariations()
+                        .add(new LoanTermVariations(data.getTermVariationType().getValue(), data.getTermVariationApplicableFrom(),
+                                data.getDecimalValue(), data.getDateValue(), data.isSpecificToInstallment(), loan,
+                                loan.getStatus().getValue()));
+            }
+        }
     }
 }

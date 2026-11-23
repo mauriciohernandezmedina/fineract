@@ -1255,10 +1255,16 @@ public final class LoanApplicationValidator {
                         .extractLocalDateNamed(LoanApiConstants.repaymentsStartingFromDateParameterName, element);
                 baseDataValidator.reset().parameter(LoanApiConstants.repaymentsStartingFromDateParameterName)
                         .value(repaymentsStartingFromDate).ignoreIfNull();
-                if (!loan.getLoanTermVariations().isEmpty()) {
+                if (!loan.getLoanTermVariations().isEmpty()
+                        && !this.fromApiJsonHelper.parameterExists(LoanApiConstants.loanTermVariationsParameterName, element)) {
                     baseDataValidator.reset()
                             .failWithCodeNoParameterAddedToErrorCode("cannot.modify.application.due.to.variable.installments");
                 }
+            }
+
+            if (this.fromApiJsonHelper.parameterExists(LoanApiConstants.loanTermVariationsParameterName, element)) {
+                atLeastOneParameterPassedForUpdate = true;
+                validateLoanTermVariations(element, baseDataValidator);
             }
 
             if (this.fromApiJsonHelper.parameterExists(LoanApiConstants.submittedOnDateParameterName, element)) {
