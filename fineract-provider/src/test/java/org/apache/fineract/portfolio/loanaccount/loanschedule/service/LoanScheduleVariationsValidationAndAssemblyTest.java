@@ -34,11 +34,17 @@ import org.apache.fineract.infrastructure.core.data.DataValidatorBuilder;
 import org.apache.fineract.infrastructure.core.exception.UnsupportedParameterException;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.portfolio.loanaccount.data.LoanTermVariationsData;
+import org.apache.fineract.portfolio.loanaccount.domain.Loan;
+import org.apache.fineract.portfolio.loanaccount.domain.LoanStatus;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanTermVariationType;
+import org.apache.fineract.portfolio.loanaccount.domain.LoanTermVariations;
+import org.apache.fineract.portfolio.loanaccount.mapper.LoanTermVariationsMapper;
 import org.apache.fineract.portfolio.loanaccount.serialization.LoanApplicationValidator;
 import org.apache.fineract.portfolio.loanaccount.serialization.LoanScheduleValidator;
+import org.apache.fineract.portfolio.loanproduct.domain.LoanProduct;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 class LoanScheduleVariationsValidationAndAssemblyTest {
 
@@ -162,5 +168,75 @@ class LoanScheduleVariationsValidationAndAssemblyTest {
 
         assertThrows(UnsupportedParameterException.class,
                 () -> this.loanApplicationValidator.validateLoanTermVariations(parsed, validatorBuilder));
+    }
+
+    @Test
+    void shouldPersistLoanTermVariationsOnLoanAndReconstructTermsForApprovalAndDisbursement() {
+        final String payload = """
+                {
+                  "locale": "en",
+                  "dateFormat": "dd MMMM yyyy",
+                  "loanTermVariations": [
+                    {
+                      "termType": 1,
+                      "applicableFromDate": "01 February 2026",
+                      "decimalValue": 950.00,
+                      "isSpecificToInstallment": true
+                    },
+                    {
+                      "termType": 4,
+                      "applicableFromDate": "01 June 2026",
+                      "dateValue": "05 June 2026",
+                      "isSpecificToInstallment": true
+                    },
+                    {
+                      "termType": "interestRateFromInstallment",
+                      "applicableFromDate": "01 March 2026",
+                      "decimalValue": 10.50,
+                      "isSpecificToInstallment": false
+                    }
+                  ]
+                }
+                """;
+
+        final JsonElement parsed = this.fromJsonHelper.parse(payload);
+        final List<LoanTermVariationsData> extracted = new ArrayList<>();
+        this.loanScheduleAssembler.extractLoanTermVariationsFromJson(parsed, extracted);
+        assertEquals(3, extracted.size());
+
+        final LoanProduct loanProduct = Mockito.mock(LoanProduct.class);
+        Mockito.when(loanProduct.isLinkedToFloatingInterestRate()).thenReturn(false);
+
+        final List<LoanTermVariations> persistedVariations = new ArrayList<>();
+        final Loan loan = Mockito.mock(Loan.class);
+        Mockito.when(loan.getLoanTermVariations()).thenReturn(persistedVariations);
+        Mockito.when(loan.getStatus()).thenReturn(LoanStatus.SUBMITTED_AND_PENDING_APPROVAL);
+        Mockito.when(loan.getLoanProduct()).thenReturn(loanProduct);
+
+        for (final LoanTermVariationsData data : extracted) {
+            persistedVariations.add(new LoanTermVariations(data.getTermVariationType().getValue(), data.getTermVariationApplicableFrom(),
+                    data.getDecimalValue(), data.getDateValue(), data.isSpecificToInstallment(), loan, loan.getStatus().getValue()));
+        }
+
+        final List<LoanTermVariationsData> reconstructed = new ArrayList<>();
+        new LoanTermVariationsMapper().constructLoanTermVariations(null, new BigDecimal("12.00"), reconstructed, loan);
+
+        assertEquals(3, reconstructed.size());
+
+        assertEquals(LoanTermVariationType.EMI_AMOUNT.getValue(), reconstructed.get(0).getTermVariationType().getValue());
+        assertEquals(LocalDate.of(2026, 2, 1), reconstructed.get(0).getTermVariationApplicableFrom());
+        assertEquals(0, new BigDecimal("950.00").compareTo(reconstructed.get(0).getDecimalValue()));
+        assertTrue(reconstructed.get(0).isSpecificToInstallment());
+
+        assertEquals(LoanTermVariationType.DUE_DATE.getValue(), reconstructed.get(1).getTermVariationType().getValue());
+        assertEquals(LocalDate.of(2026, 6, 1), reconstructed.get(1).getTermVariationApplicableFrom());
+        assertEquals(LocalDate.of(2026, 6, 5), reconstructed.get(1).getDateValue());
+        assertTrue(reconstructed.get(1).isSpecificToInstallment());
+
+        assertEquals(LoanTermVariationType.INTEREST_RATE_FROM_INSTALLMENT.getValue(),
+                reconstructed.get(2).getTermVariationType().getValue());
+        assertEquals(LocalDate.of(2026, 3, 1), reconstructed.get(2).getTermVariationApplicableFrom());
+        assertEquals(0, new BigDecimal("10.50").compareTo(reconstructed.get(2).getDecimalValue()));
+        assertFalse(reconstructed.get(2).isSpecificToInstallment());
     }
 }
