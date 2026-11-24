@@ -1,0 +1,163 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<!--
+
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements. See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership. The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied. See the License for the
+    specific language governing permissions and limitations
+    under the License.
+
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.6.xsd">
+
+    <changeSet id="fac-fundevi-pentaho-reports-0001" author="fac-fundevi" context="postgresql">
+        <sql>
+            -- 1. Missing parameters in stretchy_parameter
+            INSERT INTO stretchy_parameter (parameter_name, parameter_variable, parameter_label, "parameter_displayType", "parameter_FormatType", parameter_default)
+            SELECT 'selectLoan', 'selectLoan', 'Loan Account No', 'text', 'string', 'n/a'
+            WHERE NOT EXISTS (SELECT 1 FROM stretchy_parameter WHERE parameter_variable = 'selectLoan');
+
+            INSERT INTO stretchy_parameter (parameter_name, parameter_variable, parameter_label, "parameter_displayType", "parameter_FormatType", parameter_default)
+            SELECT 'savingsAccountId', 'savingsAccountId', 'Savings Account No', 'text', 'string', 'n/a'
+            WHERE NOT EXISTS (SELECT 1 FROM stretchy_parameter WHERE parameter_variable = 'savingsAccountId');
+
+            -- 2. Register core Pentaho reports in stretchy_report
+            INSERT INTO stretchy_report (report_name, report_type, report_category, description, core_report, use_report, self_service_user_report)
+            SELECT 'Loan Transaction Receipt', 'Pentaho', 'Loan', 'Recibo de transacción de préstamo (FAC Fundevi)', true, true, false
+            WHERE NOT EXISTS (SELECT 1 FROM stretchy_report WHERE report_name = 'Loan Transaction Receipt');
+
+            INSERT INTO stretchy_report (report_name, report_type, report_category, description, core_report, use_report, self_service_user_report)
+            SELECT 'Savings Transaction Receipt', 'Pentaho', 'Savings', 'Recibo de transacción de ahorro (FAC Fundevi)', true, true, false
+            WHERE NOT EXISTS (SELECT 1 FROM stretchy_report WHERE report_name = 'Savings Transaction Receipt');
+
+            INSERT INTO stretchy_report (report_name, report_type, report_category, description, core_report, use_report, self_service_user_report)
+            SELECT 'Client Loan Account Schedule', 'Pentaho', 'Loan', 'Calendario y estado de préstamo (FAC Fundevi)', true, true, false
+            WHERE NOT EXISTS (SELECT 1 FROM stretchy_report WHERE report_name = 'Client Loan Account Schedule');
+
+            INSERT INTO stretchy_report (report_name, report_type, report_category, description, core_report, use_report, self_service_user_report)
+            SELECT 'Client Saving Transactions', 'Pentaho', 'Savings', 'Extracto de movimientos de ahorro (FAC Fundevi)', true, true, false
+            WHERE NOT EXISTS (SELECT 1 FROM stretchy_report WHERE report_name = 'Client Saving Transactions');
+
+            INSERT INTO stretchy_report (report_name, report_type, report_category, description, core_report, use_report, self_service_user_report)
+            SELECT 'LoanApplicationReport', 'Pentaho', 'Loan', 'Ficha de solicitud de crédito y variaciones de término (FAC Fundevi)', true, true, false
+            WHERE NOT EXISTS (SELECT 1 FROM stretchy_report WHERE report_name = 'LoanApplicationReport');
+
+            INSERT INTO stretchy_report (report_name, report_type, report_category, description, core_report, use_report, self_service_user_report)
+            SELECT 'KYCNaturalPerson', 'Pentaho', 'Client', 'Ficha KYC de persona natural / asociado (FAC Fundevi)', true, true, false
+            WHERE NOT EXISTS (SELECT 1 FROM stretchy_report WHERE report_name = 'KYCNaturalPerson');
+
+            INSERT INTO stretchy_report (report_name, report_type, report_category, description, core_report, use_report, self_service_user_report)
+            SELECT 'KYCReport', 'Pentaho', 'Client', 'Ficha KYC de asociado (FAC Fundevi)', true, true, false
+            WHERE NOT EXISTS (SELECT 1 FROM stretchy_report WHERE report_name = 'KYCReport');
+
+            -- 3. Link reports to parameters in stretchy_report_parameter
+            INSERT INTO stretchy_report_parameter (report_id, parameter_id, report_parameter_name)
+            SELECT sr.id, sp.id, 'transactionId'
+            FROM stretchy_report sr, stretchy_parameter sp
+            WHERE sr.report_name = 'Loan Transaction Receipt' AND sp.parameter_variable = 'transactionId'
+              AND NOT EXISTS (SELECT 1 FROM stretchy_report_parameter srp WHERE srp.report_id = sr.id AND srp.report_parameter_name = 'transactionId');
+
+            INSERT INTO stretchy_report_parameter (report_id, parameter_id, report_parameter_name)
+            SELECT sr.id, sp.id, 'transactionId'
+            FROM stretchy_report sr, stretchy_parameter sp
+            WHERE sr.report_name = 'Savings Transaction Receipt' AND sp.parameter_variable = 'transactionId'
+              AND NOT EXISTS (SELECT 1 FROM stretchy_report_parameter srp WHERE srp.report_id = sr.id AND srp.report_parameter_name = 'transactionId');
+
+            INSERT INTO stretchy_report_parameter (report_id, parameter_id, report_parameter_name)
+            SELECT sr.id, sp.id, 'selectLoan'
+            FROM stretchy_report sr, stretchy_parameter sp
+            WHERE sr.report_name = 'Client Loan Account Schedule' AND sp.parameter_variable = 'selectLoan'
+              AND NOT EXISTS (SELECT 1 FROM stretchy_report_parameter srp WHERE srp.report_id = sr.id AND srp.report_parameter_name = 'selectLoan');
+
+            INSERT INTO stretchy_report_parameter (report_id, parameter_id, report_parameter_name)
+            SELECT sr.id, sp.id, 'startDate'
+            FROM stretchy_report sr, stretchy_parameter sp
+            WHERE sr.report_name = 'Client Loan Account Schedule' AND sp.parameter_variable = 'startDate'
+              AND NOT EXISTS (SELECT 1 FROM stretchy_report_parameter srp WHERE srp.report_id = sr.id AND srp.report_parameter_name = 'startDate');
+
+            INSERT INTO stretchy_report_parameter (report_id, parameter_id, report_parameter_name)
+            SELECT sr.id, sp.id, 'endDate'
+            FROM stretchy_report sr, stretchy_parameter sp
+            WHERE sr.report_name = 'Client Loan Account Schedule' AND sp.parameter_variable = 'endDate'
+              AND NOT EXISTS (SELECT 1 FROM stretchy_report_parameter srp WHERE srp.report_id = sr.id AND srp.report_parameter_name = 'endDate');
+
+            INSERT INTO stretchy_report_parameter (report_id, parameter_id, report_parameter_name)
+            SELECT sr.id, sp.id, 'savingsAccountId'
+            FROM stretchy_report sr, stretchy_parameter sp
+            WHERE sr.report_name = 'Client Saving Transactions' AND sp.parameter_variable = 'savingsAccountId'
+              AND NOT EXISTS (SELECT 1 FROM stretchy_report_parameter srp WHERE srp.report_id = sr.id AND srp.report_parameter_name = 'savingsAccountId');
+
+            INSERT INTO stretchy_report_parameter (report_id, parameter_id, report_parameter_name)
+            SELECT sr.id, sp.id, 'startDate'
+            FROM stretchy_report sr, stretchy_parameter sp
+            WHERE sr.report_name = 'Client Saving Transactions' AND sp.parameter_variable = 'startDate'
+              AND NOT EXISTS (SELECT 1 FROM stretchy_report_parameter srp WHERE srp.report_id = sr.id AND srp.report_parameter_name = 'startDate');
+
+            INSERT INTO stretchy_report_parameter (report_id, parameter_id, report_parameter_name)
+            SELECT sr.id, sp.id, 'endDate'
+            FROM stretchy_report sr, stretchy_parameter sp
+            WHERE sr.report_name = 'Client Saving Transactions' AND sp.parameter_variable = 'endDate'
+              AND NOT EXISTS (SELECT 1 FROM stretchy_report_parameter srp WHERE srp.report_id = sr.id AND srp.report_parameter_name = 'endDate');
+
+            INSERT INTO stretchy_report_parameter (report_id, parameter_id, report_parameter_name)
+            SELECT sr.id, sp.id, 'loanId'
+            FROM stretchy_report sr, stretchy_parameter sp
+            WHERE sr.report_name = 'LoanApplicationReport' AND sp.parameter_variable = 'loanId'
+              AND NOT EXISTS (SELECT 1 FROM stretchy_report_parameter srp WHERE srp.report_id = sr.id AND srp.report_parameter_name = 'loanId');
+
+            INSERT INTO stretchy_report_parameter (report_id, parameter_id, report_parameter_name)
+            SELECT sr.id, sp.id, 'clientId'
+            FROM stretchy_report sr, stretchy_parameter sp
+            WHERE sr.report_name = 'KYCNaturalPerson' AND sp.parameter_variable = 'clientId'
+              AND NOT EXISTS (SELECT 1 FROM stretchy_report_parameter srp WHERE srp.report_id = sr.id AND srp.report_parameter_name = 'clientId');
+
+            INSERT INTO stretchy_report_parameter (report_id, parameter_id, report_parameter_name)
+            SELECT sr.id, sp.id, 'clientId'
+            FROM stretchy_report sr, stretchy_parameter sp
+            WHERE sr.report_name = 'KYCReport' AND sp.parameter_variable = 'clientId'
+              AND NOT EXISTS (SELECT 1 FROM stretchy_report_parameter srp WHERE srp.report_id = sr.id AND srp.report_parameter_name = 'clientId');
+
+            -- 4. Insert read permissions in m_permission
+            INSERT INTO m_permission (grouping, code, entity_name, action_name, can_maker_checker)
+            SELECT 'report', 'READ_Loan Transaction Receipt', 'Loan Transaction Receipt', 'READ', false
+            WHERE NOT EXISTS (SELECT 1 FROM m_permission WHERE code = 'READ_Loan Transaction Receipt');
+
+            INSERT INTO m_permission (grouping, code, entity_name, action_name, can_maker_checker)
+            SELECT 'report', 'READ_Savings Transaction Receipt', 'Savings Transaction Receipt', 'READ', false
+            WHERE NOT EXISTS (SELECT 1 FROM m_permission WHERE code = 'READ_Savings Transaction Receipt');
+
+            INSERT INTO m_permission (grouping, code, entity_name, action_name, can_maker_checker)
+            SELECT 'report', 'READ_Client Loan Account Schedule', 'Client Loan Account Schedule', 'READ', false
+            WHERE NOT EXISTS (SELECT 1 FROM m_permission WHERE code = 'READ_Client Loan Account Schedule');
+
+            INSERT INTO m_permission (grouping, code, entity_name, action_name, can_maker_checker)
+            SELECT 'report', 'READ_Client Saving Transactions', 'Client Saving Transactions', 'READ', false
+            WHERE NOT EXISTS (SELECT 1 FROM m_permission WHERE code = 'READ_Client Saving Transactions');
+
+            INSERT INTO m_permission (grouping, code, entity_name, action_name, can_maker_checker)
+            SELECT 'report', 'READ_LoanApplicationReport', 'LoanApplicationReport', 'READ', false
+            WHERE NOT EXISTS (SELECT 1 FROM m_permission WHERE code = 'READ_LoanApplicationReport');
+
+            INSERT INTO m_permission (grouping, code, entity_name, action_name, can_maker_checker)
+            SELECT 'report', 'READ_KYCNaturalPerson', 'KYCNaturalPerson', 'READ', false
+            WHERE NOT EXISTS (SELECT 1 FROM m_permission WHERE code = 'READ_KYCNaturalPerson');
+
+            INSERT INTO m_permission (grouping, code, entity_name, action_name, can_maker_checker)
+            SELECT 'report', 'READ_KYCReport', 'KYCReport', 'READ', false
+            WHERE NOT EXISTS (SELECT 1 FROM m_permission WHERE code = 'READ_KYCReport');
+        </sql>
+    </changeSet>
+</databaseChangeLog>
