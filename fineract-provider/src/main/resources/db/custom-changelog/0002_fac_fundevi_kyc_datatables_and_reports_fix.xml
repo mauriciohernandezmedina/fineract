@@ -1,0 +1,222 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<!--
+
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements. See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership. The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied. See the License for the
+    specific language governing permissions and limitations
+    under the License.
+
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.6.xsd">
+
+    <changeSet id="fac-fundevi-kyc-datatables-and-reports-0002" author="fac-fundevi" context="postgresql">
+        <sql>
+            -- 1. Visible text parameters for LoanApplicationReport, KYCNaturalPerson and KYCReport
+            INSERT INTO stretchy_parameter (parameter_name, parameter_variable, parameter_label, "parameter_displayType", "parameter_FormatType", parameter_default)
+            SELECT 'selectLoanId', 'loanId', 'Loan ID / Account No', 'text', 'string', 'n/a'
+            WHERE NOT EXISTS (SELECT 1 FROM stretchy_parameter WHERE parameter_name = 'selectLoanId');
+
+            INSERT INTO stretchy_parameter (parameter_name, parameter_variable, parameter_label, "parameter_displayType", "parameter_FormatType", parameter_default)
+            SELECT 'selectClientId', 'clientId', 'Client ID / Account No', 'text', 'string', 'n/a'
+            WHERE NOT EXISTS (SELECT 1 FROM stretchy_parameter WHERE parameter_name = 'selectClientId');
+
+            UPDATE stretchy_report_parameter
+            SET parameter_id = (SELECT id FROM stretchy_parameter WHERE parameter_name = 'selectLoanId' LIMIT 1)
+            WHERE report_id = (SELECT id FROM stretchy_report WHERE report_name = 'LoanApplicationReport' LIMIT 1)
+              AND report_parameter_name = 'loanId';
+
+            UPDATE stretchy_report_parameter
+            SET parameter_id = (SELECT id FROM stretchy_parameter WHERE parameter_name = 'selectClientId' LIMIT 1)
+            WHERE report_id IN (SELECT id FROM stretchy_report WHERE report_name IN ('KYCNaturalPerson', 'KYCReport'))
+              AND report_parameter_name = 'clientId';
+
+            -- 2. Global configuration enable-kyc-validation
+            INSERT INTO c_configuration (name, value, enabled, is_trap_door, description)
+            SELECT 'enable-kyc-validation', 1, true, false, 'Enable KYC validation and personal data sections for FAC Fundevi'
+            WHERE NOT EXISTS (SELECT 1 FROM c_configuration WHERE name = 'enable-kyc-validation');
+
+            UPDATE c_configuration
+            SET enabled = true, value = 1
+            WHERE name = 'enable-kyc-validation';
+
+            -- 3. Create 7 KYC datatables on m_client
+            CREATE TABLE IF NOT EXISTS client_additional_profile (
+                client_id BIGINT NOT NULL PRIMARY KEY REFERENCES m_client(id),
+                nationality VARCHAR(100),
+                tax_id VARCHAR(100),
+                home_phone VARCHAR(50),
+                digital_id VARCHAR(100),
+                state_of_birth VARCHAR(100),
+                country_of_birth VARCHAR(100),
+                marital_status VARCHAR(50),
+                matrimonial_property_regime VARCHAR(100),
+                spouse_name VARCHAR(150),
+                spouse_occupation VARCHAR(150),
+                created_at TIMESTAMP WITHOUT TIME ZONE,
+                updated_at TIMESTAMP WITHOUT TIME ZONE
+            );
+
+            CREATE TABLE IF NOT EXISTS client_socioeconomic_information (
+                client_id BIGINT NOT NULL PRIMARY KEY REFERENCES m_client(id),
+                occupation VARCHAR(150),
+                economic_activity VARCHAR(150),
+                age_of_the_business INTEGER,
+                work_phone VARCHAR(50),
+                company_where_you_work VARCHAR(150),
+                company_address VARCHAR(250),
+                average_monthly_income NUMERIC(19,2),
+                average_expenses_monthly NUMERIC(19,2),
+                period VARCHAR(50),
+                number_of_economic_dependents INTEGER,
+                created_at TIMESTAMP WITHOUT TIME ZONE,
+                updated_at TIMESTAMP WITHOUT TIME ZONE
+            );
+
+            CREATE TABLE IF NOT EXISTS client_personal_references (
+                id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                client_id BIGINT NOT NULL REFERENCES m_client(id),
+                name VARCHAR(150),
+                relationship VARCHAR(100),
+                phone VARCHAR(50),
+                address VARCHAR(250),
+                created_at TIMESTAMP WITHOUT TIME ZONE,
+                updated_at TIMESTAMP WITHOUT TIME ZONE
+            );
+
+            CREATE TABLE IF NOT EXISTS client_commercial_reference (
+                id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                client_id BIGINT NOT NULL REFERENCES m_client(id),
+                name VARCHAR(150),
+                address VARCHAR(250),
+                phone VARCHAR(50),
+                created_at TIMESTAMP WITHOUT TIME ZONE,
+                updated_at TIMESTAMP WITHOUT TIME ZONE
+            );
+
+            CREATE TABLE IF NOT EXISTS client_beneficiaries (
+                id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                client_id BIGINT NOT NULL REFERENCES m_client(id),
+                name VARCHAR(150),
+                percentage NUMERIC(5,2),
+                phone VARCHAR(50),
+                relationship VARCHAR(100),
+                birthdate DATE,
+                address VARCHAR(250),
+                colony_neighborhood VARCHAR(150),
+                municipality_city VARCHAR(150),
+                locality_borough_town VARCHAR(150),
+                state VARCHAR(100),
+                nationality VARCHAR(100),
+                created_at TIMESTAMP WITHOUT TIME ZONE,
+                updated_at TIMESTAMP WITHOUT TIME ZONE
+            );
+
+            CREATE TABLE IF NOT EXISTS client_pep_pld (
+                client_id BIGINT NOT NULL PRIMARY KEY REFERENCES m_client(id),
+                is_pep VARCHAR(20),
+                level_of_government VARCHAR(100),
+                institution VARCHAR(150),
+                level_and_charge VARCHAR(150),
+                reporting_period VARCHAR(50),
+                related_to_pep VARCHAR(20),
+                full_name VARCHAR(150),
+                relationship VARCHAR(100),
+                entity_employee VARCHAR(20),
+                entity_relationship VARCHAR(20),
+                position VARCHAR(150),
+                created_at TIMESTAMP WITHOUT TIME ZONE,
+                updated_at TIMESTAMP WITHOUT TIME ZONE
+            );
+
+            CREATE TABLE IF NOT EXISTS dt_kyc_validation (
+                client_id BIGINT NOT NULL PRIMARY KEY REFERENCES m_client(id),
+                nid_selected INTEGER DEFAULT 0,
+                nid_missing INTEGER DEFAULT 0,
+                nid_illegible INTEGER DEFAULT 0,
+                nid_invalid INTEGER DEFAULT 0,
+                nid_expired INTEGER DEFAULT 0,
+                legal_id_selected INTEGER DEFAULT 0,
+                legal_id_missing INTEGER DEFAULT 0,
+                legal_id_illegible INTEGER DEFAULT 0,
+                legal_id_invalid INTEGER DEFAULT 0,
+                legal_id_expired INTEGER DEFAULT 0,
+                proof_selected INTEGER DEFAULT 0,
+                proof_missing INTEGER DEFAULT 0,
+                proof_illegible INTEGER DEFAULT 0,
+                proof_invalid INTEGER DEFAULT 0,
+                proof_expired INTEGER DEFAULT 0,
+                score_selected INTEGER DEFAULT 0,
+                score_missing INTEGER DEFAULT 0,
+                score_illegible INTEGER DEFAULT 0,
+                score_invalid INTEGER DEFAULT 0,
+                score_expired INTEGER DEFAULT 0,
+                validation_status VARCHAR(50),
+                created_at TIMESTAMP WITHOUT TIME ZONE,
+                updated_at TIMESTAMP WITHOUT TIME ZONE
+            );
+
+            -- 4. Register datatables in x_registered_table
+            INSERT INTO x_registered_table (registered_table_name, application_table_name, entity_subtype, category)
+            SELECT 'client_additional_profile', 'm_client', 'Person', 100
+            WHERE NOT EXISTS (SELECT 1 FROM x_registered_table WHERE registered_table_name = 'client_additional_profile');
+
+            INSERT INTO x_registered_table (registered_table_name, application_table_name, entity_subtype, category)
+            SELECT 'client_socioeconomic_information', 'm_client', 'Person', 100
+            WHERE NOT EXISTS (SELECT 1 FROM x_registered_table WHERE registered_table_name = 'client_socioeconomic_information');
+
+            INSERT INTO x_registered_table (registered_table_name, application_table_name, entity_subtype, category)
+            SELECT 'client_personal_references', 'm_client', 'Person', 100
+            WHERE NOT EXISTS (SELECT 1 FROM x_registered_table WHERE registered_table_name = 'client_personal_references');
+
+            INSERT INTO x_registered_table (registered_table_name, application_table_name, entity_subtype, category)
+            SELECT 'client_commercial_reference', 'm_client', 'Person', 100
+            WHERE NOT EXISTS (SELECT 1 FROM x_registered_table WHERE registered_table_name = 'client_commercial_reference');
+
+            INSERT INTO x_registered_table (registered_table_name, application_table_name, entity_subtype, category)
+            SELECT 'client_beneficiaries', 'm_client', 'Person', 100
+            WHERE NOT EXISTS (SELECT 1 FROM x_registered_table WHERE registered_table_name = 'client_beneficiaries');
+
+            INSERT INTO x_registered_table (registered_table_name, application_table_name, entity_subtype, category)
+            SELECT 'client_pep_pld', 'm_client', 'Person', 100
+            WHERE NOT EXISTS (SELECT 1 FROM x_registered_table WHERE registered_table_name = 'client_pep_pld');
+
+            INSERT INTO x_registered_table (registered_table_name, application_table_name, entity_subtype, category)
+            SELECT 'dt_kyc_validation', 'm_client', 'Person', 100
+            WHERE NOT EXISTS (SELECT 1 FROM x_registered_table WHERE registered_table_name = 'dt_kyc_validation');
+
+            -- 5. Register datatable CRUD permissions in m_permission
+            INSERT INTO m_permission (grouping, code, entity_name, action_name, can_maker_checker)
+            SELECT 'datatable', action_name || '_' || tbl, tbl, action_name, false
+            FROM (
+                VALUES
+                    ('client_additional_profile'),
+                    ('client_socioeconomic_information'),
+                    ('client_personal_references'),
+                    ('client_commercial_reference'),
+                    ('client_beneficiaries'),
+                    ('client_pep_pld'),
+                    ('dt_kyc_validation')
+            ) AS tables(tbl)
+            CROSS JOIN (
+                VALUES ('CREATE'), ('READ'), ('UPDATE'), ('DELETE')
+            ) AS actions(action_name)
+            WHERE NOT EXISTS (
+                SELECT 1 FROM m_permission WHERE code = action_name || '_' || tbl
+            );
+        </sql>
+    </changeSet>
+</databaseChangeLog>
